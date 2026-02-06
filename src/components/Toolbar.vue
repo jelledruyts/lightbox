@@ -75,8 +75,8 @@ defineExpose({
           fontWeight: '500',
           transition: 'background-color 0.2s'
         }"
-        @mouseover="$event.currentTarget.style.backgroundColor = isLoading ? '#9ca3af' : '#1d4ed8'"
-        @mouseout="$event.currentTarget.style.backgroundColor = isLoading ? '#9ca3af' : '#2563eb'"
+        @mouseover="($event.currentTarget as HTMLElement).style.backgroundColor = isLoading ? '#9ca3af' : '#1d4ed8'"
+        @mouseout="($event.currentTarget as HTMLElement).style.backgroundColor = isLoading ? '#9ca3af' : '#2563eb'"
       >
         {{ isLoading ? 'Loading...' : 'Open Folder' }}
       </button>

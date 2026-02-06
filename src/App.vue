@@ -265,7 +265,7 @@ async function deleteSelectedImages() {
     try {
     // Request write permission for the directory
     if (!folderHandle.value) return
-    const permission = await folderHandle.value.requestPermission({ mode: 'readwrite' })
+    const permission = await (folderHandle.value as any).requestPermission({ mode: 'readwrite' })
     if (permission !== 'granted') {
       alert('Permission to delete files was denied. Please grant write permission to delete files.')
       return
@@ -360,7 +360,7 @@ async function deleteRejectedImages() {
     try {
     // Request write permission for the directory
     if (!folderHandle.value) return
-    const permission = await folderHandle.value.requestPermission({ mode: 'readwrite' })
+    const permission = await (folderHandle.value as any).requestPermission({ mode: 'readwrite' })
     if (permission !== 'granted') {
       alert('Permission to delete files was denied. Please grant write permission to delete files.')
       return
