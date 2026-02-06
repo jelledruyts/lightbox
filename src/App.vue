@@ -649,7 +649,9 @@ function handleKeyDown(event: KeyboardEvent) {
   if (event.key === 'p' || event.key === 'P') {
     event.preventDefault()
     if (currentFocusIndex.value !== null) {
-      handleTriageChange(currentFocusIndex.value, 'accepted', true)
+      const currentState = triageStates.value.get(currentFocusIndex.value) || 'untriaged'
+      const newState = currentState === 'accepted' ? 'untriaged' : 'accepted'
+      handleTriageChange(currentFocusIndex.value, newState, true)
     }
     return
   }
@@ -657,7 +659,9 @@ function handleKeyDown(event: KeyboardEvent) {
   if (event.key === 'x' || event.key === 'X') {
     event.preventDefault()
     if (currentFocusIndex.value !== null) {
-      handleTriageChange(currentFocusIndex.value, 'rejected', true)
+      const currentState = triageStates.value.get(currentFocusIndex.value) || 'untriaged'
+      const newState = currentState === 'rejected' ? 'untriaged' : 'rejected'
+      handleTriageChange(currentFocusIndex.value, newState, true)
     }
     return
   }
@@ -931,8 +935,9 @@ onUnmounted(() => {
           }"
           @mouseover="canSelectAll && ($event.currentTarget.style.backgroundColor = colors.buttonHoverBg)"
           @mouseout="$event.currentTarget.style.backgroundColor = canSelectAll ? colors.buttonBg : colors.border"
+          title="Select all images (Ctrl+A)"
         >
-          Select All
+          ☐+
         </button>
         <button
           v-if="images.length > 0"
@@ -952,8 +957,9 @@ onUnmounted(() => {
           }"
           @mouseover="canClearSelection && ($event.currentTarget.style.backgroundColor = colors.buttonHoverBg)"
           @mouseout="$event.currentTarget.style.backgroundColor = canClearSelection ? colors.buttonBg : colors.border"
+          title="Clear selection (Ctrl+D)"
         >
-          Clear Selection
+          ☐-
         </button>
         <button
           v-if="images.length > 0"
@@ -973,9 +979,9 @@ onUnmounted(() => {
           }"
           @mouseover="canDelete && ($event.currentTarget.style.backgroundColor = '#b91c1c')"
           @mouseout="$event.currentTarget.style.backgroundColor = canDelete ? '#dc2626' : colors.border"
-          title="Delete selected files (Delete)"
+          title="Delete selected images (Delete)"
         >
-          Delete Selection
+          🗑
         </button>
         <button
           v-if="images.length > 0"
@@ -995,9 +1001,9 @@ onUnmounted(() => {
           }"
           @mouseover="canDeleteRejected && ($event.currentTarget.style.backgroundColor = '#b91c1c')"
           @mouseout="$event.currentTarget.style.backgroundColor = canDeleteRejected ? '#dc2626' : colors.border"
-          title="Delete all rejected images"
+          title="Delete rejected images (Ctrl+Delete)"
         >
-          Delete Rejected
+          🗑✗
         </button>
         <button
           v-if="images.length > 0"
@@ -1019,7 +1025,7 @@ onUnmounted(() => {
           @mouseout="$event.currentTarget.style.backgroundColor = canUndo ? colors.buttonBg : colors.border"
           title="Undo last triage (Ctrl+Z)"
         >
-          ↶ Undo
+          ↶
         </button>
         <button
           v-if="images.length > 0"
@@ -1041,7 +1047,7 @@ onUnmounted(() => {
           @mouseout="$event.currentTarget.style.backgroundColor = canRedo ? colors.buttonBg : colors.border"
           title="Redo last undo (Ctrl+Y)"
         >
-          ↷ Redo
+          ↷
         </button>
         
         <div v-if="images.length > 0" :style="{ width: '1px', height: '24px', backgroundColor: colors.border, margin: '0 0.5rem' }"></div>
