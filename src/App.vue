@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { ref, onUnmounted, onMounted, computed, watch } from 'vue'
-import FolderSelector from './components/FolderSelector.vue'
+import Toolbar from './components/Toolbar.vue'
 import Filmstrip from './components/Filmstrip.vue'
 import ImageViewer from './components/ImageViewer.vue'
+import ImageThumbnail from './components/ImageThumbnail.vue'
+import StatusBar from './components/StatusBar.vue'
 import { useImageLoader } from './composables/useImageLoader'
 import type { TriageState } from './types'
 
@@ -21,11 +23,36 @@ const selectionOrder = ref<number[]>([])
 const lastSelectedIndex = ref<number | null>(null)
 const currentFocusIndex = ref<number | null>(null)
 const triageStates = ref<Map<number, TriageState>>(new Map())
-const activeFilters = ref<Set<TriageState | 'unset'>>(new Set(['accepted', 'unset', 'rejected']))
+const activeFilters = ref<Set<TriageState | 'untriaged'>>(new Set(['accepted', 'untriaged', 'rejected']))
 const triageHistory = ref<TriageHistoryEntry[]>([])
 const redoHistory = ref<TriageHistoryEntry[]>([])
 const theme = ref<Theme>('system')
 const folderHandle = ref<FileSystemDirectoryHandle | null>(null)
+const viewMode = ref<'filmstrip' | 'grid'>('filmstrip')
+const showHelpModal = ref(false)
+const toolbarRef = ref<{ openFolder: () => void } | null>(null)
+const showConfirmModal = ref(false)
+const confirmModalMessage = ref('')
+const confirmModalCallback = ref<(() => void) | null>(null)
+
+function showConfirmation(message: string, onConfirm: () => void) {
+  confirmModalMessage.value = message
+  confirmModalCallback.value = onConfirm
+  showConfirmModal.value = true
+}
+
+function handleConfirm() {
+  showConfirmModal.value = false
+  if (confirmModalCallback.value) {
+    confirmModalCallback.value()
+  }
+  confirmModalCallback.value = null
+}
+
+function handleCancel() {
+  showConfirmModal.value = false
+  confirmModalCallback.value = null
+}
 
 const isDarkMode = computed(() => {
   if (theme.value === 'system') {
@@ -66,7 +93,7 @@ function saveTriageStates() {
   
   // Only save accepted and rejected states
   for (const [index, state] of triageStates.value.entries()) {
-    if (state !== 'unset') {
+    if (state !== 'untriaged') {
       const image = images.value[index]
       if (image) {
         const filePath = image.file.webkitRelativePath || image.name
@@ -123,12 +150,12 @@ watch(activeFilters, (filters) => {
 
 const filteredIndices = computed(() => {
   return Array.from({ length: images.value.length }, (_, i) => i).filter(index => {
-    const state = triageStates.value.get(index) || 'unset'
+    const state = triageStates.value.get(index) || 'untriaged'
     return activeFilters.value.has(state)
   })
 })
 
-function toggleFilter(filter: TriageState | 'unset') {
+function toggleFilter(filter: TriageState | 'untriaged') {
   if (activeFilters.value.has(filter)) {
     activeFilters.value.delete(filter)
   } else {
@@ -140,7 +167,7 @@ function toggleFilter(filter: TriageState | 'unset') {
   let maxRemovedIndex = -1
   
   selectedIndices.value.forEach(index => {
-    const state = triageStates.value.get(index) || 'unset'
+    const state = triageStates.value.get(index) || 'untriaged'
     if (!activeFilters.value.has(state)) {
       selectedToRemove.push(index)
       maxRemovedIndex = Math.max(maxRemovedIndex, index)
@@ -167,7 +194,7 @@ function toggleFilter(filter: TriageState | 'unset') {
 }
 
 function setAllFilters() {
-  activeFilters.value = new Set(['accepted', 'unset', 'rejected'])
+  activeFilters.value = new Set(['accepted', 'untriaged', 'rejected'])
 }
 
 function toggleTheme() {
@@ -181,6 +208,240 @@ function getThemeIcon() {
   if (theme.value === 'system') return '◐'
   if (theme.value === 'light') return '☀'
   return '☾'
+}
+
+function toggleViewMode() {
+  viewMode.value = viewMode.value === 'filmstrip' ? 'grid' : 'filmstrip'
+}
+
+function getViewModeIcon() {
+  return viewMode.value === 'filmstrip' ? '▦' : '▬'
+}
+
+// Computed properties for button states
+const canSelectAll = computed(() => {
+  return images.value.length > 0 && selectedIndices.value.size < filteredIndices.value.length
+})
+
+const canClearSelection = computed(() => {
+  return selectedIndices.value.size > 0
+})
+
+const canUndo = computed(() => {
+  return triageHistory.value.length > 0
+})
+
+const canRedo = computed(() => {
+  return redoHistory.value.length > 0
+})
+
+const canDelete = computed(() => {
+  return selectedIndices.value.size > 0 && folderHandle.value !== null
+})
+
+const canDeleteRejected = computed(() => {
+  if (!folderHandle.value) return false
+  // Check if there are any rejected images
+  for (let i = 0; i < images.value.length; i++) {
+    if (triageStates.value.get(i) === 'rejected') {
+      return true
+    }
+  }
+  return false
+})
+
+async function deleteSelectedImages() {
+  if (selectedIndices.value.size === 0 || !folderHandle.value) return
+  
+  const count = selectedIndices.value.size
+  const fileNames = Array.from(selectedIndices.value)
+    .map(idx => images.value[idx].name)
+    .slice(0, 5)
+  const displayNames = fileNames.join(', ') + (count > 5 ? `, and ${count - 5} more` : '')
+  
+  const message = `Are you sure you want to permanently delete ${count} image${count > 1 ? 's' : ''}?\n\n${displayNames}\n\nThis cannot be undone.`
+  
+  showConfirmation(message, async () => {
+    try {
+    // Request write permission for the directory
+    const permission = await folderHandle.value.requestPermission({ mode: 'readwrite' })
+    if (permission !== 'granted') {
+      alert('Permission to delete files was denied. Please grant write permission to delete files.')
+      return
+    }
+    
+    const indicesToDelete = Array.from(selectedIndices.value)
+    
+    // Delete files from disk
+    for (const index of indicesToDelete) {
+      const fileName = images.value[index].name
+      try {
+        await folderHandle.value.removeEntry(fileName)
+      } catch (error) {
+        console.error(`Failed to delete ${fileName}:`, error)
+        alert(`Failed to delete ${fileName}. Error: ${(error as Error).message}`)
+        return
+      }
+    }
+    
+    // Remove from images array and update indices
+    const remainingImages = images.value.filter((_, idx) => !indicesToDelete.includes(idx))
+    
+    // Clear deleted images from state
+    indicesToDelete.forEach(idx => {
+      triageStates.value.delete(idx)
+    })
+    
+    // Rebuild the images and states with new indices
+    images.value.splice(0, images.value.length, ...remainingImages)
+    
+    // Rebuild triage states with updated indices
+    const newTriageStates = new Map<number, TriageState>()
+    let newIndex = 0
+    for (let oldIndex = 0; oldIndex < images.value.length + indicesToDelete.length; oldIndex++) {
+      if (!indicesToDelete.includes(oldIndex)) {
+        const state = triageStates.value.get(oldIndex)
+        if (state) {
+          newTriageStates.set(newIndex, state)
+        }
+        newIndex++
+      }
+    }
+    triageStates.value = newTriageStates
+    
+    // Clear selection
+    selectedIndices.value.clear()
+    selectionOrder.value = []
+    
+    // Select next visible image
+    if (filteredIndices.value.length > 0) {
+      const nextIndex = filteredIndices.value[0]
+      selectedIndices.value.add(nextIndex)
+      selectionOrder.value.push(nextIndex)
+      lastSelectedIndex.value = nextIndex
+      currentFocusIndex.value = nextIndex
+    } else {
+      lastSelectedIndex.value = null
+      currentFocusIndex.value = null
+    }
+    
+    // Save updated triage states
+    saveTriageStates()
+    } catch (error) {
+      console.error('Error deleting files:', error)
+      alert('Failed to delete files. Make sure you have permission.')
+    }
+  })
+}
+
+async function deleteRejectedImages() {
+  if (!folderHandle.value) return
+  
+  // Find all rejected images
+  const rejectedIndices: number[] = []
+  for (let i = 0; i < images.value.length; i++) {
+    if (triageStates.value.get(i) === 'rejected') {
+      rejectedIndices.push(i)
+    }
+  }
+  
+  if (rejectedIndices.length === 0) return
+  
+  const count = rejectedIndices.length
+  const fileNames = rejectedIndices
+    .slice(0, 5)
+    .map(idx => images.value[idx].name)
+  const displayNames = fileNames.join(', ') + (count > 5 ? `, and ${count - 5} more` : '')
+  
+  const message = `Are you sure you want to permanently delete ${count} rejected image${count > 1 ? 's' : ''}?\n\n${displayNames}\n\nThis cannot be undone.`
+  
+  showConfirmation(message, async () => {
+    try {
+    // Request write permission for the directory
+    const permission = await folderHandle.value.requestPermission({ mode: 'readwrite' })
+    if (permission !== 'granted') {
+      alert('Permission to delete files was denied. Please grant write permission to delete files.')
+      return
+    }
+    
+    // Delete files from disk
+    for (const index of rejectedIndices) {
+      const fileName = images.value[index].name
+      try {
+        await folderHandle.value.removeEntry(fileName)
+      } catch (error) {
+        console.error(`Failed to delete ${fileName}:`, error)
+        alert(`Failed to delete ${fileName}. Error: ${(error as Error).message}`)
+        return
+      }
+    }
+    
+    // Remove from images array
+    const remainingImages = images.value.filter((_, idx) => !rejectedIndices.includes(idx))
+    
+    // Rebuild triage states with updated indices
+    const newTriageStates = new Map<number, TriageState>()
+    let newIndex = 0
+    for (let oldIndex = 0; oldIndex < images.value.length; oldIndex++) {
+      if (!rejectedIndices.includes(oldIndex)) {
+        const state = triageStates.value.get(oldIndex)
+        if (state) {
+          newTriageStates.set(newIndex, state)
+        }
+        newIndex++
+      }
+    }
+    
+    // Update state
+    images.value.splice(0, images.value.length, ...remainingImages)
+    triageStates.value = newTriageStates
+    
+    // Clear selection if any selected images were deleted
+    const newSelectedIndices = new Set<number>()
+    const newSelectionOrder: number[] = []
+    
+    for (const oldIndex of selectedIndices.value) {
+      if (!rejectedIndices.includes(oldIndex)) {
+        // Calculate new index
+        const newIdx = oldIndex - rejectedIndices.filter(ri => ri < oldIndex).length
+        newSelectedIndices.add(newIdx)
+        newSelectionOrder.push(newIdx)
+      }
+    }
+    
+    selectedIndices.value = newSelectedIndices
+    selectionOrder.value = newSelectionOrder
+    
+    // Update focus index
+    if (currentFocusIndex.value !== null && !rejectedIndices.includes(currentFocusIndex.value)) {
+      currentFocusIndex.value = currentFocusIndex.value - rejectedIndices.filter(ri => ri < currentFocusIndex.value!).length
+    } else {
+      currentFocusIndex.value = null
+    }
+    
+    // Update last selected index
+    if (lastSelectedIndex.value !== null && !rejectedIndices.includes(lastSelectedIndex.value)) {
+      lastSelectedIndex.value = lastSelectedIndex.value - rejectedIndices.filter(ri => ri < lastSelectedIndex.value!).length
+    } else {
+      lastSelectedIndex.value = null
+    }
+    
+    // If nothing is selected after deletion, select first visible
+    if (selectedIndices.value.size === 0 && filteredIndices.value.length > 0) {
+      const nextIndex = filteredIndices.value[0]
+      selectedIndices.value.add(nextIndex)
+      selectionOrder.value.push(nextIndex)
+      lastSelectedIndex.value = nextIndex
+      currentFocusIndex.value = nextIndex
+    }
+    
+    // Save updated triage states
+    saveTriageStates()
+    } catch (error) {
+      console.error('Error deleting rejected files:', error)
+      alert('Failed to delete files. Make sure you have permission.')
+    }
+  })
 }
 
 async function handleFolderSelected(files: File[], dirHandle: FileSystemDirectoryHandle) {
@@ -200,10 +461,14 @@ async function handleFolderSelected(files: File[], dirHandle: FileSystemDirector
   loadTriageStates()
   
   if (images.value.length > 0) {
-    selectedIndices.value.add(0)
-    selectionOrder.value.push(0)
-    lastSelectedIndex.value = 0
-    currentFocusIndex.value = 0
+    // Select first visible image (respecting active filters)
+    const firstVisibleIndex = filteredIndices.value[0]
+    if (firstVisibleIndex !== undefined) {
+      selectedIndices.value.add(firstVisibleIndex)
+      selectionOrder.value.push(firstVisibleIndex)
+      lastSelectedIndex.value = firstVisibleIndex
+      currentFocusIndex.value = firstVisibleIndex
+    }
   }
 }
 
@@ -236,6 +501,34 @@ function handleImageSelect(index: number, event: MouseEvent) {
 }
 
 function handleKeyDown(event: KeyboardEvent) {
+  // Close help dialog with Escape
+  if (event.key === 'Escape') {
+    if (showConfirmModal.value) {
+      event.preventDefault()
+      handleCancel()
+      return
+    }
+    if (showHelpModal.value) {
+      event.preventDefault()
+      showHelpModal.value = false
+      return
+    }
+  }
+  
+  // Show help dialog with ?
+  if (event.key === '?' && !event.ctrlKey && !event.metaKey) {
+    event.preventDefault()
+    showHelpModal.value = true
+    return
+  }
+  
+  // Open folder with O
+  if ((event.key === 'o' || event.key === 'O') && !event.ctrlKey && !event.metaKey) {
+    event.preventDefault()
+    toolbarRef.value?.openFolder()
+    return
+  }
+  
   if (images.value.length === 0) return
   
   // Select All with Ctrl+A
@@ -266,10 +559,10 @@ function handleKeyDown(event: KeyboardEvent) {
     return
   }
   
-  // Toggle filter for Unset with Ctrl+U
+  // Toggle filter for Untriaged with Ctrl+U
   if ((event.ctrlKey || event.metaKey) && (event.key === 'u' || event.key === 'U')) {
     event.preventDefault()
-    toggleFilter('unset')
+    toggleFilter('untriaged')
     return
   }
   
@@ -284,6 +577,71 @@ function handleKeyDown(event: KeyboardEvent) {
   if ((event.ctrlKey || event.metaKey) && event.key === 'y') {
     event.preventDefault()
     redoTriageChange()
+    return
+  }
+  
+  // Toggle view mode with V
+  if (event.key === 'v' || event.key === 'V') {
+    event.preventDefault()
+    toggleViewMode()
+    return
+  }
+  
+  // Switch to Compare view with C
+  if (event.key === 'c' || event.key === 'C') {
+    event.preventDefault()
+    viewMode.value = 'filmstrip'
+    return
+  }
+  
+  // Switch to Grid view with G
+  if (event.key === 'g' || event.key === 'G') {
+    event.preventDefault()
+    viewMode.value = 'grid'
+    return
+  }
+  
+  // Delete selected images with Delete key
+  if (event.key === 'Delete' && !event.ctrlKey && !event.metaKey) {
+    event.preventDefault()
+    deleteSelectedImages()
+    return
+  }
+  
+  // Delete rejected images with Ctrl+Delete
+  if (event.key === 'Delete' && (event.ctrlKey || event.metaKey)) {
+    event.preventDefault()
+    deleteRejectedImages()
+    return
+  }
+  
+  // Home key - select first image
+  if (event.key === 'Home') {
+    event.preventDefault()
+    if (filteredIndices.value.length > 0) {
+      const firstIndex = filteredIndices.value[0]
+      currentFocusIndex.value = firstIndex
+      selectedIndices.value.clear()
+      selectionOrder.value = [firstIndex]
+      selectedIndices.value.add(firstIndex)
+      lastSelectedIndex.value = firstIndex
+      scrollToImage(firstIndex)
+    }
+    return
+  }
+  
+  // End key - select last image
+  if (event.key === 'End') {
+    event.preventDefault()
+    if (filteredIndices.value.length > 0) {
+      const lastIndex = filteredIndices.value[filteredIndices.value.length - 1]
+      currentFocusIndex.value = lastIndex
+      selectedIndices.value.clear()
+      selectionOrder.value = [lastIndex]
+      selectedIndices.value.add(lastIndex)
+      lastSelectedIndex.value = lastIndex
+      scrollToImage(lastIndex)
+    }
     return
   }
   
@@ -307,7 +665,7 @@ function handleKeyDown(event: KeyboardEvent) {
   if (event.key === 'u' || event.key === 'U') {
     event.preventDefault()
     if (currentFocusIndex.value !== null) {
-      handleTriageChange(currentFocusIndex.value, 'unset', true)
+      handleTriageChange(currentFocusIndex.value, 'untriaged', true)
     }
     return
   }
@@ -417,7 +775,7 @@ function handleTriageChange(index: number, state: TriageState, applyToSelection:
   
   // Apply new state to all
   for (const idx of indicesToChange) {
-    if (state === 'unset') {
+    if (state === 'untriaged') {
       triageStates.value.delete(idx)
     } else {
       triageStates.value.set(idx, state)
@@ -426,7 +784,7 @@ function handleTriageChange(index: number, state: TriageState, applyToSelection:
   
   // Handle filtering and selection updates
   for (const idx of indicesToChange) {
-    const newState = triageStates.value.get(idx) || 'unset'
+    const newState = triageStates.value.get(idx) || 'untriaged'
     const isFilteredOut = !activeFilters.value.has(newState)
     
     if (isFilteredOut && selectedIndices.value.has(idx)) {
@@ -517,7 +875,7 @@ onMounted(() => {
   const savedFilters = localStorage.getItem('lightbox-filters')
   if (savedFilters) {
     try {
-      const filtersArray = JSON.parse(savedFilters) as (TriageState | 'unset')[]
+      const filtersArray = JSON.parse(savedFilters) as (TriageState | 'untriaged')[]
       activeFilters.value = new Set(filtersArray)
     } catch (error) {
       console.error('Failed to load saved filters:', error)
@@ -552,83 +910,135 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div :style="{ height: '100vh', display: 'grid', gridTemplateRows: 'auto auto 1fr', overflow: 'hidden', backgroundColor: colors.bg, color: colors.text }">
-    <FolderSelector :colors="colors" @folder-selected="handleFolderSelected">
+  <div :style="{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', backgroundColor: colors.bg, color: colors.text }">
+    <Toolbar ref="toolbarRef" :colors="colors" @folder-selected="handleFolderSelected">
       <template #actions>
         <button
           v-if="images.length > 0"
           @click="selectAll"
+          :disabled="!canSelectAll"
           :style="{
             padding: '0.5rem 1rem',
-            backgroundColor: colors.buttonBg,
-            color: colors.text,
+            backgroundColor: canSelectAll ? colors.buttonBg : colors.border,
+            color: canSelectAll ? colors.text : colors.textSecondary,
             borderRadius: '0.5rem',
             border: 'none',
-            cursor: 'pointer',
+            cursor: canSelectAll ? 'pointer' : 'not-allowed',
             fontSize: '0.875rem',
             transition: 'background-color 0.2s',
-            whiteSpace: 'nowrap'
+            whiteSpace: 'nowrap',
+            opacity: canSelectAll ? '1' : '0.5'
           }"
-          @mouseover="$event.currentTarget.style.backgroundColor = colors.buttonHoverBg"
-          @mouseout="$event.currentTarget.style.backgroundColor = colors.buttonBg"
+          @mouseover="canSelectAll && ($event.currentTarget.style.backgroundColor = colors.buttonHoverBg)"
+          @mouseout="$event.currentTarget.style.backgroundColor = canSelectAll ? colors.buttonBg : colors.border"
         >
           Select All
         </button>
         <button
-          v-if="selectedIndices.size > 0"
+          v-if="images.length > 0"
           @click="clearSelection"
+          :disabled="!canClearSelection"
           :style="{
             padding: '0.5rem 1rem',
-            backgroundColor: colors.buttonBg,
-            color: colors.text,
+            backgroundColor: canClearSelection ? colors.buttonBg : colors.border,
+            color: canClearSelection ? colors.text : colors.textSecondary,
             borderRadius: '0.5rem',
             border: 'none',
-            cursor: 'pointer',
+            cursor: canClearSelection ? 'pointer' : 'not-allowed',
             fontSize: '0.875rem',
             transition: 'background-color 0.2s',
-            whiteSpace: 'nowrap'
+            whiteSpace: 'nowrap',
+            opacity: canClearSelection ? '1' : '0.5'
           }"
-          @mouseover="$event.currentTarget.style.backgroundColor = colors.buttonHoverBg"
-          @mouseout="$event.currentTarget.style.backgroundColor = colors.buttonBg"
+          @mouseover="canClearSelection && ($event.currentTarget.style.backgroundColor = colors.buttonHoverBg)"
+          @mouseout="$event.currentTarget.style.backgroundColor = canClearSelection ? colors.buttonBg : colors.border"
         >
           Clear Selection
         </button>
         <button
-          v-if="images.length > 0 && triageHistory.length > 0"
-          @click="undoTriageChange"
+          v-if="images.length > 0"
+          @click="deleteSelectedImages"
+          :disabled="!canDelete"
           :style="{
             padding: '0.5rem 1rem',
-            backgroundColor: colors.buttonBg,
-            color: colors.text,
+            backgroundColor: canDelete ? '#dc2626' : colors.border,
+            color: canDelete ? 'white' : colors.textSecondary,
             borderRadius: '0.5rem',
             border: 'none',
-            cursor: 'pointer',
+            cursor: canDelete ? 'pointer' : 'not-allowed',
             fontSize: '0.875rem',
             transition: 'background-color 0.2s',
-            whiteSpace: 'nowrap'
+            whiteSpace: 'nowrap',
+            opacity: canDelete ? '1' : '0.5'
           }"
-          @mouseover="$event.currentTarget.style.backgroundColor = colors.buttonHoverBg"
-          @mouseout="$event.currentTarget.style.backgroundColor = colors.buttonBg"
+          @mouseover="canDelete && ($event.currentTarget.style.backgroundColor = '#b91c1c')"
+          @mouseout="$event.currentTarget.style.backgroundColor = canDelete ? '#dc2626' : colors.border"
+          title="Delete selected files (Delete)"
+        >
+          Delete Selection
+        </button>
+        <button
+          v-if="images.length > 0"
+          @click="deleteRejectedImages"
+          :disabled="!canDeleteRejected"
+          :style="{
+            padding: '0.5rem 1rem',
+            backgroundColor: canDeleteRejected ? '#dc2626' : colors.border,
+            color: canDeleteRejected ? 'white' : colors.textSecondary,
+            borderRadius: '0.5rem',
+            border: 'none',
+            cursor: canDeleteRejected ? 'pointer' : 'not-allowed',
+            fontSize: '0.875rem',
+            transition: 'background-color 0.2s',
+            whiteSpace: 'nowrap',
+            opacity: canDeleteRejected ? '1' : '0.5'
+          }"
+          @mouseover="canDeleteRejected && ($event.currentTarget.style.backgroundColor = '#b91c1c')"
+          @mouseout="$event.currentTarget.style.backgroundColor = canDeleteRejected ? '#dc2626' : colors.border"
+          title="Delete all rejected images"
+        >
+          Delete Rejected
+        </button>
+        <button
+          v-if="images.length > 0"
+          @click="undoTriageChange"
+          :disabled="!canUndo"
+          :style="{
+            padding: '0.5rem 1rem',
+            backgroundColor: canUndo ? colors.buttonBg : colors.border,
+            color: canUndo ? colors.text : colors.textSecondary,
+            borderRadius: '0.5rem',
+            border: 'none',
+            cursor: canUndo ? 'pointer' : 'not-allowed',
+            fontSize: '0.875rem',
+            transition: 'background-color 0.2s',
+            whiteSpace: 'nowrap',
+            opacity: canUndo ? '1' : '0.5'
+          }"
+          @mouseover="canUndo && ($event.currentTarget.style.backgroundColor = colors.buttonHoverBg)"
+          @mouseout="$event.currentTarget.style.backgroundColor = canUndo ? colors.buttonBg : colors.border"
           title="Undo last triage (Ctrl+Z)"
         >
           ↶ Undo
         </button>
         <button
-          v-if="images.length > 0 && redoHistory.length > 0"
+          v-if="images.length > 0"
           @click="redoTriageChange"
+          :disabled="!canRedo"
           :style="{
             padding: '0.5rem 1rem',
-            backgroundColor: colors.buttonBg,
-            color: colors.text,
+            backgroundColor: canRedo ? colors.buttonBg : colors.border,
+            color: canRedo ? colors.text : colors.textSecondary,
             borderRadius: '0.5rem',
             border: 'none',
-            cursor: 'pointer',
+            cursor: canRedo ? 'pointer' : 'not-allowed',
             fontSize: '0.875rem',
             transition: 'background-color 0.2s',
-            whiteSpace: 'nowrap'
+            whiteSpace: 'nowrap',
+            opacity: canRedo ? '1' : '0.5'
           }"
-          @mouseover="$event.currentTarget.style.backgroundColor = colors.buttonHoverBg"
-          @mouseout="$event.currentTarget.style.backgroundColor = colors.buttonBg"
+          @mouseover="canRedo && ($event.currentTarget.style.backgroundColor = colors.buttonHoverBg)"
+          @mouseout="$event.currentTarget.style.backgroundColor = canRedo ? colors.buttonBg : colors.border"
           title="Redo last undo (Ctrl+Y)"
         >
           ↷ Redo
@@ -654,6 +1064,47 @@ onUnmounted(() => {
           :title="`Theme: ${theme}`"
         >
           {{ getThemeIcon() }}
+        </button>
+        
+        <button
+          v-if="images.length > 0"
+          @click="toggleViewMode"
+          :style="{
+            padding: '0.5rem 1rem',
+            backgroundColor: colors.buttonBg,
+            color: colors.text,
+            borderRadius: '0.5rem',
+            border: 'none',
+            cursor: 'pointer',
+            fontSize: '0.875rem',
+            transition: 'background-color 0.2s',
+            whiteSpace: 'nowrap'
+          }"
+          @mouseover="$event.currentTarget.style.backgroundColor = colors.buttonHoverBg"
+          @mouseout="$event.currentTarget.style.backgroundColor = colors.buttonBg"
+          :title="`View: ${viewMode}`"
+        >
+          {{ getViewModeIcon() }}
+        </button>
+        
+        <button
+          @click="showHelpModal = true"
+          :style="{
+            padding: '0.5rem 1rem',
+            backgroundColor: colors.buttonBg,
+            color: colors.text,
+            borderRadius: '0.5rem',
+            border: 'none',
+            cursor: 'pointer',
+            fontSize: '0.875rem',
+            transition: 'background-color 0.2s',
+            whiteSpace: 'nowrap'
+          }"
+          @mouseover="$event.currentTarget.style.backgroundColor = colors.buttonHoverBg"
+          @mouseout="$event.currentTarget.style.backgroundColor = colors.buttonBg"
+          title="Keyboard shortcuts"
+        >
+          ?
         </button>
         
         <div v-if="images.length > 0" :style="{ width: '1px', height: '24px', backgroundColor: colors.border, margin: '0 0.5rem' }"></div>
@@ -694,11 +1145,11 @@ onUnmounted(() => {
         </button>
         <button
           v-if="images.length > 0"
-          @click="toggleFilter('unset')"
+          @click="toggleFilter('untriaged')"
           :style="{
             padding: '0.5rem 1rem',
-            backgroundColor: activeFilters.has('unset') ? '#6b7280' : colors.buttonBg,
-            color: activeFilters.has('unset') ? 'white' : colors.text,
+            backgroundColor: activeFilters.has('untriaged') ? '#6b7280' : colors.buttonBg,
+            color: activeFilters.has('untriaged') ? 'white' : colors.text,
             borderRadius: '0.5rem',
             border: 'none',
             cursor: 'pointer',
@@ -707,7 +1158,7 @@ onUnmounted(() => {
             whiteSpace: 'nowrap'
           }"
         >
-          ○ Unset
+          ○ Untriaged
         </button>
         <button
           v-if="images.length > 0"
@@ -727,25 +1178,329 @@ onUnmounted(() => {
           ✗ Rejected
         </button>
       </template>
-    </FolderSelector>
-    <Filmstrip
-      :images="images"
-      :selected-indices="selectedIndices"
-      :current-focus-index="currentFocusIndex"
-      :triage-states="triageStates"
-      :filtered-indices="filteredIndices"
+    </Toolbar>
+    
+    <!-- Filmstrip + Viewer Mode -->
+    <div v-if="viewMode === 'filmstrip'" :style="{ flex: '1 1 0', display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden', backgroundColor: colors.bgSecondary }">
+      <Filmstrip
+        :images="images"
+        :selected-indices="selectedIndices"
+        :current-focus-index="currentFocusIndex"
+        :triage-states="triageStates"
+        :filtered-indices="filteredIndices"
+        :colors="colors"
+        @select="handleImageSelect"
+        @triage-change="handleTriageChange"
+      />
+      <div :style="{ flex: '1 1 0', overflow: 'hidden', minHeight: 0, position: 'relative', marginBottom: '16px' }">
+        <ImageViewer
+          :images="images"
+          :selected-indices="selectedIndices"
+          :selection-order="selectionOrder"
+          :triage-states="triageStates"
+          :colors="colors"
+          @triage-change="handleTriageChange"
+          @deselect="handleImageDeselect"
+        />
+      </div>
+    </div>
+    
+    <!-- Grid View Mode -->
+    <div v-else :style="{ flex: '1', overflow: 'auto', padding: '0.5rem', backgroundColor: colors.bgSecondary }">
+      <div :style="{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '0.5rem', maxWidth: '100%', justifyItems: 'center' }">
+        <ImageThumbnail
+          v-for="(image, index) in images"
+          v-show="filteredIndices.includes(index)"
+          :key="image.url"
+          :image="image"
+          :index="index"
+          :is-selected="selectedIndices.has(index)"
+          :is-focused="currentFocusIndex === index"
+          :triage-state="triageStates.get(index)"
+          @select="handleImageSelect"
+          @triage-change="(idx, state) => handleTriageChange(idx, state, false)"
+          @mouseenter="currentFocusIndex = index"
+          @mouseleave="currentFocusIndex = null"
+        />
+      </div>
+    </div>
+    
+    <StatusBar
+      :total-images="images.length"
+      :filtered-count="filteredIndices.length"
+      :selected-count="selectedIndices.size"
       :colors="colors"
-      @select="handleImageSelect"
-      @triage-change="handleTriageChange"
     />
-    <ImageViewer
-      :images="images"
-      :selected-indices="selectedIndices"
-      :selection-order="selectionOrder"
-      :triage-states="triageStates"
-      :colors="colors"
-      @triage-change="handleTriageChange"
-      @deselect="handleImageDeselect"
-    />
+    
+    <!-- Help Modal -->
+    <div
+      v-if="showHelpModal"
+      @click="showHelpModal = false"
+      :style="{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000
+      }"
+    >
+      <div
+        @click.stop
+        :style="{
+          backgroundColor: colors.bg,
+          color: colors.text,
+          borderRadius: '0.5rem',
+          padding: '2rem',
+          width: '800px',
+          maxWidth: '90vw',
+          maxHeight: '80vh',
+          overflow: 'auto',
+          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3)'
+        }"
+      >
+        <div :style="{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }">
+          <h2 :style="{ margin: 0, fontSize: '1.5rem', fontWeight: 'bold' }">Keyboard Shortcuts</h2>
+          <button
+            @click="showHelpModal = false"
+            :style="{
+              background: 'none',
+              border: 'none',
+              color: colors.text,
+              fontSize: '1.5rem',
+              cursor: 'pointer',
+              padding: '0',
+              width: '2rem',
+              height: '2rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }"
+            title="Close"
+          >
+            ×
+          </button>
+        </div>
+        
+        <div :style="{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }">
+          <!-- File Operations -->
+          <div>
+            <h3 :style="{ margin: '0 0 0.75rem 0', fontSize: '1.125rem', fontWeight: '600', color: '#8b5cf6' }">File Operations</h3>
+            <div :style="{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }">
+              <div :style="{ display: 'flex', justifyContent: 'space-between' }">
+                <span>Open folder</span>
+                <kbd :style="{ padding: '0.25rem 0.5rem', backgroundColor: colors.bgSecondary, borderRadius: '0.25rem', fontSize: '0.875rem' }">O</kbd>
+              </div>
+              <div :style="{ display: 'flex', justifyContent: 'space-between' }">
+                <span>Delete selected images</span>
+                <kbd :style="{ padding: '0.25rem 0.5rem', backgroundColor: colors.bgSecondary, borderRadius: '0.25rem', fontSize: '0.875rem' }">Delete</kbd>
+              </div>
+              <div :style="{ display: 'flex', justifyContent: 'space-between' }">
+                <span>Delete rejected images</span>
+                <kbd :style="{ padding: '0.25rem 0.5rem', backgroundColor: colors.bgSecondary, borderRadius: '0.25rem', fontSize: '0.875rem' }">Ctrl + Delete</kbd>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Navigation -->
+          <div>
+            <h3 :style="{ margin: '0 0 0.75rem 0', fontSize: '1.125rem', fontWeight: '600', color: '#3b82f6' }">Navigation</h3>
+            <div :style="{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }">
+              <div :style="{ display: 'flex', justifyContent: 'space-between' }">
+                <span>Navigate images</span>
+                <kbd :style="{ padding: '0.25rem 0.5rem', backgroundColor: colors.bgSecondary, borderRadius: '0.25rem', fontSize: '0.875rem' }">← →</kbd>
+              </div>
+              <div :style="{ display: 'flex', justifyContent: 'space-between' }">
+                <span>Expand selection</span>
+                <kbd :style="{ padding: '0.25rem 0.5rem', backgroundColor: colors.bgSecondary, borderRadius: '0.25rem', fontSize: '0.875rem' }">Shift + ← →</kbd>
+              </div>
+              <div :style="{ display: 'flex', justifyContent: 'space-between' }">
+                <span>First image</span>
+                <kbd :style="{ padding: '0.25rem 0.5rem', backgroundColor: colors.bgSecondary, borderRadius: '0.25rem', fontSize: '0.875rem' }">Home</kbd>
+              </div>
+              <div :style="{ display: 'flex', justifyContent: 'space-between' }">
+                <span>Last image</span>
+                <kbd :style="{ padding: '0.25rem 0.5rem', backgroundColor: colors.bgSecondary, borderRadius: '0.25rem', fontSize: '0.875rem' }">End</kbd>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Selection -->
+          <div>
+            <h3 :style="{ margin: '0 0 0.75rem 0', fontSize: '1.125rem', fontWeight: '600', color: '#10b981' }">Selection</h3>
+            <div :style="{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }">
+              <div :style="{ display: 'flex', justifyContent: 'space-between' }">
+                <span>Select all</span>
+                <kbd :style="{ padding: '0.25rem 0.5rem', backgroundColor: colors.bgSecondary, borderRadius: '0.25rem', fontSize: '0.875rem' }">Ctrl + A</kbd>
+              </div>
+              <div :style="{ display: 'flex', justifyContent: 'space-between' }">
+                <span>Clear selection</span>
+                <kbd :style="{ padding: '0.25rem 0.5rem', backgroundColor: colors.bgSecondary, borderRadius: '0.25rem', fontSize: '0.875rem' }">Ctrl + D</kbd>
+              </div>
+              <div :style="{ display: 'flex', justifyContent: 'space-between' }">
+                <span>Toggle selection</span>
+                <kbd :style="{ padding: '0.25rem 0.5rem', backgroundColor: colors.bgSecondary, borderRadius: '0.25rem', fontSize: '0.875rem' }">Ctrl + Click</kbd>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Triage -->
+          <div>
+            <h3 :style="{ margin: '0 0 0.75rem 0', fontSize: '1.125rem', fontWeight: '600', color: '#f59e0b' }">Triage</h3>
+            <div :style="{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }">
+              <div :style="{ display: 'flex', justifyContent: 'space-between' }">
+                <span>Mark as accepted</span>
+                <kbd :style="{ padding: '0.25rem 0.5rem', backgroundColor: colors.bgSecondary, borderRadius: '0.25rem', fontSize: '0.875rem' }">P</kbd>
+              </div>
+              <div :style="{ display: 'flex', justifyContent: 'space-between' }">
+                <span>Mark as rejected</span>
+                <kbd :style="{ padding: '0.25rem 0.5rem', backgroundColor: colors.bgSecondary, borderRadius: '0.25rem', fontSize: '0.875rem' }">X</kbd>
+              </div>
+              <div :style="{ display: 'flex', justifyContent: 'space-between' }">
+                <span>Mark as untriaged</span>
+                <kbd :style="{ padding: '0.25rem 0.5rem', backgroundColor: colors.bgSecondary, borderRadius: '0.25rem', fontSize: '0.875rem' }">U</kbd>
+              </div>
+              <div :style="{ display: 'flex', justifyContent: 'space-between' }">
+                <span>Undo</span>
+                <kbd :style="{ padding: '0.25rem 0.5rem', backgroundColor: colors.bgSecondary, borderRadius: '0.25rem', fontSize: '0.875rem' }">Ctrl + Z</kbd>
+              </div>
+              <div :style="{ display: 'flex', justifyContent: 'space-between' }">
+                <span>Redo</span>
+                <kbd :style="{ padding: '0.25rem 0.5rem', backgroundColor: colors.bgSecondary, borderRadius: '0.25rem', fontSize: '0.875rem' }">Ctrl + Y</kbd>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Filters -->
+          <div>
+            <h3 :style="{ margin: '0 0 0.75rem 0', fontSize: '1.125rem', fontWeight: '600', color: '#a855f7' }">Filters</h3>
+            <div :style="{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }">
+              <div :style="{ display: 'flex', justifyContent: 'space-between' }">
+                <span>Toggle accepted filter</span>
+                <kbd :style="{ padding: '0.25rem 0.5rem', backgroundColor: colors.bgSecondary, borderRadius: '0.25rem', fontSize: '0.875rem' }">Ctrl + P</kbd>
+              </div>
+              <div :style="{ display: 'flex', justifyContent: 'space-between' }">
+                <span>Toggle rejected filter</span>
+                <kbd :style="{ padding: '0.25rem 0.5rem', backgroundColor: colors.bgSecondary, borderRadius: '0.25rem', fontSize: '0.875rem' }">Ctrl + X</kbd>
+              </div>
+              <div :style="{ display: 'flex', justifyContent: 'space-between' }">
+                <span>Toggle untriaged filter</span>
+                <kbd :style="{ padding: '0.25rem 0.5rem', backgroundColor: colors.bgSecondary, borderRadius: '0.25rem', fontSize: '0.875rem' }">Ctrl + U</kbd>
+              </div>
+            </div>
+          </div>
+          
+          <!-- View -->
+          <div>
+            <h3 :style="{ margin: '0 0 0.75rem 0', fontSize: '1.125rem', fontWeight: '600', color: '#ec4899' }">View</h3>
+            <div :style="{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }">
+              <div :style="{ display: 'flex', justifyContent: 'space-between' }">
+                <span>Toggle view mode</span>
+                <kbd :style="{ padding: '0.25rem 0.5rem', backgroundColor: colors.bgSecondary, borderRadius: '0.25rem', fontSize: '0.875rem' }">V</kbd>
+              </div>
+              <div :style="{ display: 'flex', justifyContent: 'space-between' }">
+                <span>Compare view</span>
+                <kbd :style="{ padding: '0.25rem 0.5rem', backgroundColor: colors.bgSecondary, borderRadius: '0.25rem', fontSize: '0.875rem' }">C</kbd>
+              </div>
+              <div :style="{ display: 'flex', justifyContent: 'space-between' }">
+                <span>Grid view</span>
+                <kbd :style="{ padding: '0.25rem 0.5rem', backgroundColor: colors.bgSecondary, borderRadius: '0.25rem', fontSize: '0.875rem' }">G</kbd>
+              </div>
+            </div>
+          </div>
+          
+          <!-- Help -->
+          <div>
+            <h3 :style="{ margin: '0 0 0.75rem 0', fontSize: '1.125rem', fontWeight: '600', color: '#6b7280' }">Help</h3>
+            <div :style="{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }">
+              <div :style="{ display: 'flex', justifyContent: 'space-between' }">
+                <span>Show keyboard shortcuts</span>
+                <kbd :style="{ padding: '0.25rem 0.5rem', backgroundColor: colors.bgSecondary, borderRadius: '0.25rem', fontSize: '0.875rem' }">?</kbd>
+              </div>
+              <div :style="{ display: 'flex', justifyContent: 'space-between' }">
+                <span>Close dialog</span>
+                <kbd :style="{ padding: '0.25rem 0.5rem', backgroundColor: colors.bgSecondary, borderRadius: '0.25rem', fontSize: '0.875rem' }">Esc</kbd>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Confirmation Modal -->
+    <div
+      v-if="showConfirmModal"
+      @click="handleCancel"
+      :style="{
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1000
+      }"
+    >
+      <div
+        @click.stop
+        :style="{
+          backgroundColor: colors.bg,
+          color: colors.text,
+          borderRadius: '0.5rem',
+          padding: '2rem',
+          width: '500px',
+          maxWidth: '90vw',
+          boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.3)'
+        }"
+      >
+        <h2 :style="{ margin: '0 0 1rem 0', fontSize: '1.25rem', fontWeight: 'bold' }">Confirm Deletion</h2>
+        <p :style="{ margin: '0 0 1.5rem 0', whiteSpace: 'pre-line', lineHeight: '1.5' }">{{ confirmModalMessage }}</p>
+        
+        <div :style="{ display: 'flex', gap: '0.75rem', justifyContent: 'flex-end' }">
+          <button
+            @click="handleCancel"
+            :style="{
+              padding: '0.5rem 1.5rem',
+              backgroundColor: colors.buttonBg,
+              color: colors.text,
+              borderRadius: '0.5rem',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: '0.875rem',
+              transition: 'background-color 0.2s'
+            }"
+            @mouseover="$event.currentTarget.style.backgroundColor = colors.buttonHoverBg"
+            @mouseout="$event.currentTarget.style.backgroundColor = colors.buttonBg"
+          >
+            Cancel
+          </button>
+          <button
+            @click="handleConfirm"
+            :style="{
+              padding: '0.5rem 1.5rem',
+              backgroundColor: '#dc2626',
+              color: 'white',
+              borderRadius: '0.5rem',
+              border: 'none',
+              cursor: 'pointer',
+              fontSize: '0.875rem',
+              fontWeight: '500',
+              transition: 'background-color 0.2s'
+            }"
+            @mouseover="$event.currentTarget.style.backgroundColor = '#b91c1c'"
+            @mouseout="$event.currentTarget.style.backgroundColor = '#dc2626'"
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>

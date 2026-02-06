@@ -1,4 +1,4 @@
-export type TriageState = 'unset' | 'accepted' | 'rejected'
+export type TriageState = 'untriaged' | 'accepted' | 'rejected'
 
 export interface ImageFile {
   file: File

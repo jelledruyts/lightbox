@@ -52,6 +52,11 @@ async function openFolder() {
     isLoading.value = false
   }
 }
+
+// Expose openFolder to parent component
+defineExpose({
+  openFolder
+})
 </script>
 
 <template>

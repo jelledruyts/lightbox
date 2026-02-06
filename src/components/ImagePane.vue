@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import type { ZoomPanState, TriageState } from '../types'
+import type { TriageState } from '../types'
 
 const props = defineProps<{
   imageUrl: string
@@ -11,57 +11,116 @@ const props = defineProps<{
   x: number
   y: number
   triageState?: TriageState
+  sharedZoom: number
+  sharedPanX: number
+  sharedPanY: number
 }>()
 
 const emit = defineEmits<{
   triageChange: [index: number, state: TriageState]
   deselect: [index: number]
+  zoomChange: [zoom: number]
+  panChange: [panX: number, panY: number]
+  resetZoom: []
 }>()
-
-const zoomPan = ref<ZoomPanState>({
-  zoom: 1,
-  panX: 0,
-  panY: 0
-})
 
 const isDragging = ref(false)
 const dragStart = ref({ x: 0, y: 0 })
+const isHovered = ref(false)
+
+function constrainPan(panX: number, panY: number, zoom: number) {
+  if (zoom <= 1) {
+    return { panX: 0, panY: 0 }
+  }
+  
+  // Calculate maximum pan distance based on zoom level and container size
+  const maxPanX = (props.width * (zoom - 1)) / 2
+  const maxPanY = (props.height * (zoom - 1)) / 2
+  
+  return {
+    panX: Math.max(-maxPanX, Math.min(maxPanX, panX)),
+    panY: Math.max(-maxPanY, Math.min(maxPanY, panY))
+  }
+}
 
 function handleWheel(event: WheelEvent) {
   event.preventDefault()
   const delta = event.deltaY > 0 ? 0.9 : 1.1
-  zoomPan.value.zoom = Math.max(0.1, Math.min(5, zoomPan.value.zoom * delta))
+  const newZoom = Math.max(1, Math.min(5, props.sharedZoom * delta))
+  
+  // If zooming out to 1, reset pan to 0
+  if (newZoom === 1) {
+    emit('panChange', 0, 0)
+  } else {
+    // Constrain existing pan to new zoom level
+    const constrained = constrainPan(props.sharedPanX, props.sharedPanY, newZoom)
+    emit('panChange', constrained.panX, constrained.panY)
+  }
+  
+  emit('zoomChange', newZoom)
 }
 
 function handleMouseDown(event: MouseEvent) {
   if (event.button !== 0) return
   isDragging.value = true
   dragStart.value = {
-    x: event.clientX - zoomPan.value.panX,
-    y: event.clientY - zoomPan.value.panY
+    x: event.clientX - props.sharedPanX,
+    y: event.clientY - props.sharedPanY
   }
 }
 
 function handleMouseMove(event: MouseEvent) {
   if (!isDragging.value) return
-  zoomPan.value.panX = event.clientX - dragStart.value.x
-  zoomPan.value.panY = event.clientY - dragStart.value.y
+  const newPanX = event.clientX - dragStart.value.x
+  const newPanY = event.clientY - dragStart.value.y
+  
+  // Constrain pan to keep image within bounds
+  const constrained = constrainPan(newPanX, newPanY, props.sharedZoom)
+  emit('panChange', constrained.panX, constrained.panY)
 }
 
 function handleMouseUp() {
   isDragging.value = false
 }
 
+function handleMouseLeave() {
+  isDragging.value = false
+}
+
+function handleClick(event: MouseEvent) {
+  // Only handle if Ctrl/Cmd is pressed and not dragging
+  if ((event.ctrlKey || event.metaKey) && !isDragging.value) {
+    event.stopPropagation()
+    emit('deselect', props.imageIndex)
+  }
+}
+
 function resetView() {
-  zoomPan.value = { zoom: 1, panX: 0, panY: 0 }
+  emit('resetZoom')
 }
 
 function zoomIn() {
-  zoomPan.value.zoom = Math.min(5, zoomPan.value.zoom * 1.2)
+  const newZoom = Math.min(5, props.sharedZoom * 1.2)
+  
+  // Constrain pan to new zoom level
+  const constrained = constrainPan(props.sharedPanX, props.sharedPanY, newZoom)
+  emit('panChange', constrained.panX, constrained.panY)
+  emit('zoomChange', newZoom)
 }
 
 function zoomOut() {
-  zoomPan.value.zoom = Math.max(0.1, zoomPan.value.zoom / 1.2)
+  const newZoom = Math.max(1, props.sharedZoom / 1.2)
+  
+  // If zooming out to 1, reset pan to 0
+  if (newZoom === 1) {
+    emit('panChange', 0, 0)
+  } else {
+    // Constrain pan to new zoom level
+    const constrained = constrainPan(props.sharedPanX, props.sharedPanY, newZoom)
+    emit('panChange', constrained.panX, constrained.panY)
+  }
+  
+  emit('zoomChange', newZoom)
 }
 
 function handleTriageClick(state: TriageState) {
@@ -78,23 +137,36 @@ function handleTriageClick(state: TriageState) {
       top: y + 'px',
       width: width + 'px',
       height: height + 'px',
-      backgroundImage: `url(${imageUrl})`,
-      backgroundSize: 'contain',
-      backgroundPosition: 'center',
-      backgroundRepeat: 'no-repeat',
-      backgroundColor: '#2d2d2d',
-      transform: `scale(${zoomPan.zoom})`,
-      transformOrigin: 'center',
-      cursor: isDragging ? 'grabbing' : 'grab'
+      overflow: 'hidden',
+      backgroundColor: '#2d2d2d'
     }"
-    @wheel="handleWheel"
-    @mousedown="handleMouseDown"
-    @mousemove="handleMouseMove"
-    @mouseup="handleMouseUp"
-    @mouseleave="handleMouseUp"
+    @mouseenter="isHovered = true"
+    @mouseleave="isHovered = false"
   >
+    <div
+      :style="{
+        width: '100%',
+        height: '100%',
+        backgroundImage: `url(${imageUrl})`,
+        backgroundSize: 'contain',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+        transform: `translate(${sharedPanX}px, ${sharedPanY}px) scale(${sharedZoom})`,
+        transformOrigin: 'center',
+        cursor: isDragging ? 'grabbing' : 'grab'
+      }"
+      @wheel="handleWheel"
+      @mousedown="handleMouseDown"
+      @mousemove="handleMouseMove"
+      @mouseup="handleMouseUp"
+      @mouseleave="handleMouseLeave"
+      @click="handleClick"
+    >
+    </div>
+    
     <!-- Controls -->
     <div 
+      v-show="isHovered"
       :style="{
         position: 'absolute',
         bottom: '8px',
@@ -108,22 +180,28 @@ function handleTriageClick(state: TriageState) {
       <button @click="resetView" style="padding: 4px 8px; background: rgba(0,0,0,0.7); color: white; border: none; border-radius: 4px; cursor: pointer;" title="Reset">⟲</button>
     </div>
     
-    <!-- Image name -->
-    <div style="position: absolute; top: 8px; left: 8px; padding: 4px 8px; background: rgba(0,0,0,0.7); color: white; border-radius: 4px; font-size: 12px;">
-      {{ imageName }}
-    </div>
-    
-    <!-- Deselect button -->
-    <div style="position: absolute; top: 8px; left: 50%; transform: translateX(-50%);">
-      <button
-        @click="emit('deselect', imageIndex)"
-        title="Deselect this image"
-        style="padding: 4px 12px; background: rgba(0,0,0,0.7); color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;"
-      >✕ Deselect</button>
-    </div>
+    <!-- Triage state indicator -->
+    <div 
+      v-if="triageState && triageState !== 'untriaged'"
+      :style="{
+        position: 'absolute',
+        top: '8px',
+        left: '8px',
+        width: '24px',
+        height: '24px',
+        borderRadius: '50%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontSize: '14px',
+        fontWeight: 'bold',
+        backgroundColor: triageState === 'accepted' ? '#10b981' : '#ef4444',
+        color: 'white'
+      }"
+    >{{ triageState === 'accepted' ? '✓' : '✗' }}</div>
     
     <!-- Triage controls -->
-    <div :style="{
+    <div v-show="isHovered" :style="{
       position: 'absolute',
       top: '8px',
       right: '8px',
@@ -152,7 +230,7 @@ function handleTriageClick(state: TriageState) {
         }"
       >✓</button>
       <button
-        @click="handleTriageClick('unset')"
+        @click="handleTriageClick('untriaged')"
         :title="'Clear triage'"
         :style="{
           width: '28px',
@@ -164,8 +242,8 @@ function handleTriageClick(state: TriageState) {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: !triageState || triageState === 'unset' ? '#6b7280' : 'rgba(255, 255, 255, 0.1)',
-          color: !triageState || triageState === 'unset' ? 'white' : '#d1d5db',
+          backgroundColor: !triageState || triageState === 'untriaged' ? '#6b7280' : 'rgba(255, 255, 255, 0.1)',
+          color: !triageState || triageState === 'untriaged' ? 'white' : '#d1d5db',
           transition: 'all 0.2s'
         }"
       >○</button>

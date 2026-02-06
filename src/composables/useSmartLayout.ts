@@ -21,7 +21,8 @@ export function useSmartLayout(
     if (viewerElement.value) {
       const rect = viewerElement.value.getBoundingClientRect()
       const newWidth = rect.width
-      const newHeight = rect.height
+      // Reduce height by 48px to leave room for bottom controls
+      const newHeight = rect.height - 48
       
       // Only update if we have valid, reasonable dimensions
       if (newWidth > 0 && newHeight > 0 && newWidth < 10000 && newHeight < 10000) {
