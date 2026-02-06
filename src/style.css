@@ -1,0 +1,56 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #app {
+  margin: 0;
+  padding: 0;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* Custom scrollbar styles */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--scrollbar-track, #e5e7eb);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb, #9ca3af);
+  border-radius: 6px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover, #6b7280);
+}
+
+/* Dark mode scrollbars */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --scrollbar-track: #374151;
+    --scrollbar-thumb: #6b7280;
+    --scrollbar-thumb-hover: #9ca3af;
+  }
+}
+
+/* Force dark scrollbars */
+[data-theme="dark"] {
+  --scrollbar-track: #374151;
+  --scrollbar-thumb: #6b7280;
+  --scrollbar-thumb-hover: #9ca3af;
+}
+
+/* Force light scrollbars */
+[data-theme="light"] {
+  --scrollbar-track: #e5e7eb;
+  --scrollbar-thumb: #9ca3af;
+  --scrollbar-thumb-hover: #6b7280;
+}
