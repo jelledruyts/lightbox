@@ -264,6 +264,7 @@ async function deleteSelectedImages() {
   showConfirmation(message, async () => {
     try {
     // Request write permission for the directory
+    if (!folderHandle.value) return
     const permission = await folderHandle.value.requestPermission({ mode: 'readwrite' })
     if (permission !== 'granted') {
       alert('Permission to delete files was denied. Please grant write permission to delete files.')
@@ -358,6 +359,7 @@ async function deleteRejectedImages() {
   showConfirmation(message, async () => {
     try {
     // Request write permission for the directory
+    if (!folderHandle.value) return
     const permission = await folderHandle.value.requestPermission({ mode: 'readwrite' })
     if (permission !== 'granted') {
       alert('Permission to delete files was denied. Please grant write permission to delete files.')
@@ -933,8 +935,8 @@ onUnmounted(() => {
             whiteSpace: 'nowrap',
             opacity: canSelectAll ? '1' : '0.5'
           }"
-          @mouseover="canSelectAll && ($event.currentTarget.style.backgroundColor = colors.buttonHoverBg)"
-          @mouseout="$event.currentTarget.style.backgroundColor = canSelectAll ? colors.buttonBg : colors.border"
+          @mouseover="canSelectAll && (($event.currentTarget as HTMLElement).style.backgroundColor = colors.buttonHoverBg)"
+          @mouseout="($event.currentTarget as HTMLElement).style.backgroundColor = canSelectAll ? colors.buttonBg : colors.border"
           title="Select all images (Ctrl+A)"
         >
           ☐+
@@ -955,8 +957,8 @@ onUnmounted(() => {
             whiteSpace: 'nowrap',
             opacity: canClearSelection ? '1' : '0.5'
           }"
-          @mouseover="canClearSelection && ($event.currentTarget.style.backgroundColor = colors.buttonHoverBg)"
-          @mouseout="$event.currentTarget.style.backgroundColor = canClearSelection ? colors.buttonBg : colors.border"
+          @mouseover="canClearSelection && (($event.currentTarget as HTMLElement).style.backgroundColor = colors.buttonHoverBg)"
+          @mouseout="($event.currentTarget as HTMLElement).style.backgroundColor = canClearSelection ? colors.buttonBg : colors.border"
           title="Clear selection (Ctrl+D)"
         >
           ☐-
@@ -977,8 +979,8 @@ onUnmounted(() => {
             whiteSpace: 'nowrap',
             opacity: canDelete ? '1' : '0.5'
           }"
-          @mouseover="canDelete && ($event.currentTarget.style.backgroundColor = '#b91c1c')"
-          @mouseout="$event.currentTarget.style.backgroundColor = canDelete ? '#dc2626' : colors.border"
+          @mouseover="canDelete && (($event.currentTarget as HTMLElement).style.backgroundColor = '#b91c1c')"
+          @mouseout="($event.currentTarget as HTMLElement).style.backgroundColor = canDelete ? '#dc2626' : colors.border"
           title="Delete selected images (Delete)"
         >
           🗑
@@ -999,8 +1001,8 @@ onUnmounted(() => {
             whiteSpace: 'nowrap',
             opacity: canDeleteRejected ? '1' : '0.5'
           }"
-          @mouseover="canDeleteRejected && ($event.currentTarget.style.backgroundColor = '#b91c1c')"
-          @mouseout="$event.currentTarget.style.backgroundColor = canDeleteRejected ? '#dc2626' : colors.border"
+          @mouseover="canDeleteRejected && (($event.currentTarget as HTMLElement).style.backgroundColor = '#b91c1c')"
+          @mouseout="($event.currentTarget as HTMLElement).style.backgroundColor = canDeleteRejected ? '#dc2626' : colors.border"
           title="Delete rejected images (Ctrl+Delete)"
         >
           🗑✗
@@ -1021,8 +1023,8 @@ onUnmounted(() => {
             whiteSpace: 'nowrap',
             opacity: canUndo ? '1' : '0.5'
           }"
-          @mouseover="canUndo && ($event.currentTarget.style.backgroundColor = colors.buttonHoverBg)"
-          @mouseout="$event.currentTarget.style.backgroundColor = canUndo ? colors.buttonBg : colors.border"
+          @mouseover="canUndo && (($event.currentTarget as HTMLElement).style.backgroundColor = colors.buttonHoverBg)"
+          @mouseout="($event.currentTarget as HTMLElement).style.backgroundColor = canUndo ? colors.buttonBg : colors.border"
           title="Undo last triage (Ctrl+Z)"
         >
           ↶
@@ -1043,8 +1045,8 @@ onUnmounted(() => {
             whiteSpace: 'nowrap',
             opacity: canRedo ? '1' : '0.5'
           }"
-          @mouseover="canRedo && ($event.currentTarget.style.backgroundColor = colors.buttonHoverBg)"
-          @mouseout="$event.currentTarget.style.backgroundColor = canRedo ? colors.buttonBg : colors.border"
+          @mouseover="canRedo && (($event.currentTarget as HTMLElement).style.backgroundColor = colors.buttonHoverBg)"
+          @mouseout="($event.currentTarget as HTMLElement).style.backgroundColor = canRedo ? colors.buttonBg : colors.border"
           title="Redo last undo (Ctrl+Y)"
         >
           ↷
@@ -1065,8 +1067,8 @@ onUnmounted(() => {
             transition: 'background-color 0.2s',
             whiteSpace: 'nowrap'
           }"
-          @mouseover="$event.currentTarget.style.backgroundColor = colors.buttonHoverBg"
-          @mouseout="$event.currentTarget.style.backgroundColor = colors.buttonBg"
+          @mouseover="($event.currentTarget as HTMLElement).style.backgroundColor = colors.buttonHoverBg"
+          @mouseout="($event.currentTarget as HTMLElement).style.backgroundColor = colors.buttonBg"
           :title="`Theme: ${theme}`"
         >
           {{ getThemeIcon() }}
@@ -1086,8 +1088,8 @@ onUnmounted(() => {
             transition: 'background-color 0.2s',
             whiteSpace: 'nowrap'
           }"
-          @mouseover="$event.currentTarget.style.backgroundColor = colors.buttonHoverBg"
-          @mouseout="$event.currentTarget.style.backgroundColor = colors.buttonBg"
+          @mouseover="($event.currentTarget as HTMLElement).style.backgroundColor = colors.buttonHoverBg"
+          @mouseout="($event.currentTarget as HTMLElement).style.backgroundColor = colors.buttonBg"
           :title="`View: ${viewMode}`"
         >
           {{ getViewModeIcon() }}
@@ -1106,8 +1108,8 @@ onUnmounted(() => {
             transition: 'background-color 0.2s',
             whiteSpace: 'nowrap'
           }"
-          @mouseover="$event.currentTarget.style.backgroundColor = colors.buttonHoverBg"
-          @mouseout="$event.currentTarget.style.backgroundColor = colors.buttonBg"
+          @mouseover="($event.currentTarget as HTMLElement).style.backgroundColor = colors.buttonHoverBg"
+          @mouseout="($event.currentTarget as HTMLElement).style.backgroundColor = colors.buttonBg"
           title="Keyboard shortcuts"
         >
           ?
@@ -1482,8 +1484,8 @@ onUnmounted(() => {
               fontSize: '0.875rem',
               transition: 'background-color 0.2s'
             }"
-            @mouseover="$event.currentTarget.style.backgroundColor = colors.buttonHoverBg"
-            @mouseout="$event.currentTarget.style.backgroundColor = colors.buttonBg"
+            @mouseover="($event.currentTarget as HTMLElement).style.backgroundColor = colors.buttonHoverBg"
+            @mouseout="($event.currentTarget as HTMLElement).style.backgroundColor = colors.buttonBg"
           >
             Cancel
           </button>
@@ -1500,8 +1502,8 @@ onUnmounted(() => {
               fontWeight: '500',
               transition: 'background-color 0.2s'
             }"
-            @mouseover="$event.currentTarget.style.backgroundColor = '#b91c1c'"
-            @mouseout="$event.currentTarget.style.backgroundColor = '#dc2626'"
+            @mouseover="($event.currentTarget as HTMLElement).style.backgroundColor = '#b91c1c'"
+            @mouseout="($event.currentTarget as HTMLElement).style.backgroundColor = '#dc2626'"
           >
             Delete
           </button>
