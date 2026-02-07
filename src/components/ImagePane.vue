@@ -37,15 +37,26 @@ const emit = defineEmits<{
 const isDragging = ref(false)
 const dragStart = ref({ x: 0, y: 0 })
 const isHovered = ref(false)
+const containerRef = ref<HTMLElement>()
 
 function constrainPan(panX: number, panY: number, zoom: number) {
   if (zoom <= 1) {
     return { panX: 0, panY: 0 }
   }
   
+  // Get container dimensions
+  let width = props.width
+  let height = props.height
+  
+  // In detail view, use actual container dimensions
+  if (props.isDetailView && containerRef.value) {
+    width = containerRef.value.clientWidth
+    height = containerRef.value.clientHeight
+  }
+  
   // Calculate maximum pan distance based on zoom level and container size
-  const maxPanX = (props.width * (zoom - 1)) / 2
-  const maxPanY = (props.height * (zoom - 1)) / 2
+  const maxPanX = (width * (zoom - 1)) / 2
+  const maxPanY = (height * (zoom - 1)) / 2
   
   return {
     panX: Math.max(-maxPanX, Math.min(maxPanX, panX)),
@@ -141,6 +152,7 @@ function handleTriageClick(state: TriageState) {
 
 <template>
   <div
+    ref="containerRef"
     :style="{
       position: isDetailView ? 'static' : 'absolute',
       left: isDetailView ? 'auto' : x + 'px',

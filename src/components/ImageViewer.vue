@@ -74,7 +74,7 @@ function resetZoom() {
 </script>
 
 <template>
-  <div ref="viewerRef" :style="{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: colors.bgSecondary, overflow: 'hidden' }">
+  <div ref="viewerRef" :style="{ position: 'absolute', top: '0.5rem', left: '0.5rem', right: '0.5rem', bottom: '0.5rem', backgroundColor: colors.bgSecondary, overflow: 'hidden' }">
     <div v-if="selectedIndices.size === 0" :style="{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: colors.textSecondary }">
       <div style="text-align: center;">
         <p style="font-size: 1.125rem; margin-bottom: 0.5rem;">No images selected</p>

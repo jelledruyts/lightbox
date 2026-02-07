@@ -5,8 +5,8 @@ export function calculateSmartLayout(
   viewportWidth: number,
   viewportHeight: number,
   gap: number = 8,
-  padding: number = 16,
-  bottomPadding: number = 32
+  padding: number = 0,
+  bottomPadding: number = 0
 ): GridLayout {
   const count = images.length
 

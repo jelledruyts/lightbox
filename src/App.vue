@@ -255,6 +255,26 @@ function resetDetailZoom() {
   detailPanY.value = 0
 }
 
+function handleDetailViewDeselect(index: number) {
+  // Remove from selection
+  selectedIndices.value.delete(index)
+  selectionOrder.value = selectionOrder.value.filter(i => i !== index)
+  
+  // If there are still selected images, navigate to the next one
+  if (selectedIndices.value.size > 0) {
+    const selectedArray = Array.from(selectedIndices.value).sort((a, b) => a - b)
+    // Stay at the same position if possible, or go to the previous one
+    if (detailViewIndex.value >= selectedArray.length) {
+      detailViewIndex.value = selectedArray.length - 1
+    }
+    currentFocusIndex.value = selectedArray[detailViewIndex.value]
+  } else {
+    // No more selected images, exit detail view
+    viewMode.value = 'filmstrip'
+    currentFocusIndex.value = null
+  }
+}
+
 // Computed properties for button states
 const canSelectAll = computed(() => {
   return images.value.length > 0 && selectedIndices.value.size < filteredIndices.value.length
@@ -1318,7 +1338,7 @@ onUnmounted(() => {
         @select="handleImageSelect"
         @triage-change="handleTriageChange"
       />
-      <div :style="{ flex: '1 1 0', overflow: 'hidden', minHeight: 0, position: 'relative', marginBottom: '16px' }">
+      <div :style="{ flex: '1 1 0', overflow: 'hidden', minHeight: 0, position: 'relative' }">
         <ImageViewer
           :images="images"
           :selected-indices="selectedIndices"
@@ -1352,7 +1372,7 @@ onUnmounted(() => {
     </div>
     
     <!-- Detail View Mode -->
-    <div v-else-if="viewMode === 'detail'" :style="{ flex: '1', display: 'flex', flexDirection: 'column', backgroundColor: colors.bgSecondary, position: 'relative', overflow: 'hidden' }">
+    <div v-else-if="viewMode === 'detail'" :style="{ flex: '1', display: 'flex', flexDirection: 'column', backgroundColor: colors.bgSecondary, position: 'relative', overflow: 'hidden', padding: '0.5rem' }">
       <div v-if="selectedIndices.size === 0" :style="{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: colors.textSecondary, fontSize: '1.125rem' }">
         No images selected. Select images to view in detail mode.
       </div>
@@ -1436,6 +1456,7 @@ onUnmounted(() => {
           :shared-pan-y="detailPanY"
           :is-detail-view="true"
           :colors="colors"
+          @deselect="handleDetailViewDeselect"
           @triage-change="(idx, state) => handleTriageChange(idx, state, false)"
           @zoom-change="handleDetailZoomChange"
           @pan-change="handleDetailPanChange"
