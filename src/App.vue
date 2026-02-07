@@ -1141,69 +1141,6 @@ onUnmounted(() => {
         <div v-if="images.length > 0" :style="{ width: '1px', height: '24px', backgroundColor: colors.border, margin: '0 0.5rem' }"></div>
         
         <button
-          @click="toggleTheme"
-          :style="{
-            padding: '0.5rem 1rem',
-            backgroundColor: colors.buttonBg,
-            color: colors.text,
-            borderRadius: '0.5rem',
-            border: 'none',
-            cursor: 'pointer',
-            fontSize: '0.875rem',
-            transition: 'background-color 0.2s',
-            whiteSpace: 'nowrap'
-          }"
-          @mouseover="($event.currentTarget as HTMLElement).style.backgroundColor = colors.buttonHoverBg"
-          @mouseout="($event.currentTarget as HTMLElement).style.backgroundColor = colors.buttonBg"
-          :title="`Theme: ${theme}`"
-        >
-          {{ getThemeIcon() }}
-        </button>
-        
-        <button
-          v-if="images.length > 0"
-          @click="toggleViewMode"
-          :style="{
-            padding: '0.5rem 1rem',
-            backgroundColor: colors.buttonBg,
-            color: colors.text,
-            borderRadius: '0.5rem',
-            border: 'none',
-            cursor: 'pointer',
-            fontSize: '0.875rem',
-            transition: 'background-color 0.2s',
-            whiteSpace: 'nowrap'
-          }"
-          @mouseover="($event.currentTarget as HTMLElement).style.backgroundColor = colors.buttonHoverBg"
-          @mouseout="($event.currentTarget as HTMLElement).style.backgroundColor = colors.buttonBg"
-          :title="`View: ${viewMode}`"
-        >
-          {{ getViewModeIcon() }}
-        </button>
-        
-        <button
-          @click="showHelpModal = true"
-          :style="{
-            padding: '0.5rem 1rem',
-            backgroundColor: colors.buttonBg,
-            color: colors.text,
-            borderRadius: '0.5rem',
-            border: 'none',
-            cursor: 'pointer',
-            fontSize: '0.875rem',
-            transition: 'background-color 0.2s',
-            whiteSpace: 'nowrap'
-          }"
-          @mouseover="($event.currentTarget as HTMLElement).style.backgroundColor = colors.buttonHoverBg"
-          @mouseout="($event.currentTarget as HTMLElement).style.backgroundColor = colors.buttonBg"
-          title="Keyboard shortcuts"
-        >
-          ?
-        </button>
-        
-        <div v-if="images.length > 0" :style="{ width: '1px', height: '24px', backgroundColor: colors.border, margin: '0 0.5rem' }"></div>
-        
-        <button
           v-if="images.length > 0"
           @click="setAllFilters"
           :style="{
@@ -1270,6 +1207,73 @@ onUnmounted(() => {
           }"
         >
           ✗ Rejected
+        </button>
+        
+        <!-- Spacer to push theme and help buttons to the right -->
+        <div :style="{ flex: '1' }"></div>
+        
+        <!-- View mode button (conditional) -->
+        <button
+          v-if="images.length > 0"
+          @click="toggleViewMode"
+          :style="{
+            padding: '0.5rem 1rem',
+            backgroundColor: colors.buttonBg,
+            color: colors.text,
+            borderRadius: '0.5rem',
+            border: 'none',
+            cursor: 'pointer',
+            fontSize: '0.875rem',
+            transition: 'background-color 0.2s',
+            whiteSpace: 'nowrap'
+          }"
+          @mouseover="($event.currentTarget as HTMLElement).style.backgroundColor = colors.buttonHoverBg"
+          @mouseout="($event.currentTarget as HTMLElement).style.backgroundColor = colors.buttonBg"
+          :title="`View: ${viewMode}`"
+        >
+          {{ getViewModeIcon() }}
+        </button>
+        
+        <!-- Theme button (always visible) -->
+        <button
+          @click="toggleTheme"
+          :style="{
+            padding: '0.5rem 1rem',
+            backgroundColor: colors.buttonBg,
+            color: colors.text,
+            borderRadius: '0.5rem',
+            border: 'none',
+            cursor: 'pointer',
+            fontSize: '0.875rem',
+            transition: 'background-color 0.2s',
+            whiteSpace: 'nowrap'
+          }"
+          @mouseover="($event.currentTarget as HTMLElement).style.backgroundColor = colors.buttonHoverBg"
+          @mouseout="($event.currentTarget as HTMLElement).style.backgroundColor = colors.buttonBg"
+          :title="`Theme: ${theme}`"
+        >
+          {{ getThemeIcon() }}
+        </button>
+        
+        <!-- Help button (always visible) -->
+        <button
+          @click="showHelpModal = true"
+          :style="{
+            padding: '0.5rem 1rem',
+            backgroundColor: colors.buttonBg,
+            color: colors.text,
+            borderRadius: '0.5rem',
+            border: 'none',
+            cursor: 'pointer',
+            fontSize: '0.875rem',
+            transition: 'background-color 0.2s',
+            whiteSpace: 'nowrap'
+          }"
+          @mouseover="($event.currentTarget as HTMLElement).style.backgroundColor = colors.buttonHoverBg"
+          @mouseout="($event.currentTarget as HTMLElement).style.backgroundColor = colors.buttonBg"
+          title="Keyboard shortcuts"
+        >
+          ?
         </button>
       </template>
     </Toolbar>
