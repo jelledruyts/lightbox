@@ -1254,8 +1254,60 @@ onUnmounted(() => {
       </template>
     </Toolbar>
     
+    <!-- Welcome Screen (when no folder loaded) -->
+    <div v-if="images.length === 0" :style="{ flex: '1', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg, padding: '2rem' }">
+      <div :style="{ maxWidth: '600px', textAlign: 'center' }">
+        <h1 :style="{ fontSize: '2.5rem', fontWeight: '700', marginBottom: '1rem', color: colors.text }">
+          Lightbox
+        </h1>
+        <p :style="{ fontSize: '1.25rem', lineHeight: '1.8', color: colors.textSecondary, marginBottom: '2rem' }">
+          A fast image comparison and triage tool. Open a folder to view and compare your images side-by-side. Everything runs locally in your browser—nothing is ever sent to the internet.
+        </p>
+        <div :style="{ display: 'flex', flexDirection: 'column', gap: '1rem', alignItems: 'center', marginBottom: '2rem' }">
+          <div :style="{ display: 'flex', gap: '1rem', alignItems: 'center', color: colors.text }">
+            <span :style="{ fontSize: '1.5rem' }">📁</span>
+            <span>Browse and select multiple images</span>
+          </div>
+          <div :style="{ display: 'flex', gap: '1rem', alignItems: 'center', color: colors.text }">
+            <span :style="{ fontSize: '1.5rem' }">🔍</span>
+            <span>Compare images side-by-side with synchronized zoom</span>
+          </div>
+          <div :style="{ display: 'flex', gap: '1rem', alignItems: 'center', color: colors.text }">
+            <span :style="{ fontSize: '1.5rem' }">✓</span>
+            <span>Triage images as accepted, rejected, or untriaged</span>
+          </div>
+          <div :style="{ display: 'flex', gap: '1rem', alignItems: 'center', color: colors.text }">
+            <span :style="{ fontSize: '1.5rem' }">⌨️</span>
+            <span>Fast keyboard shortcuts for efficient workflow</span>
+          </div>
+        </div>
+        <button
+          @click="toolbarRef?.openFolder()"
+          :style="{
+            padding: '1rem 2rem',
+            backgroundColor: '#2563eb',
+            color: 'white',
+            borderRadius: '0.5rem',
+            border: 'none',
+            cursor: 'pointer',
+            fontSize: '1.125rem',
+            fontWeight: '600',
+            transition: 'background-color 0.2s',
+            boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)'
+          }"
+          @mouseover="($event.currentTarget as HTMLElement).style.backgroundColor = '#1d4ed8'"
+          @mouseout="($event.currentTarget as HTMLElement).style.backgroundColor = '#2563eb'"
+        >
+          Open Folder to Get Started
+        </button>
+        <p :style="{ marginTop: '1.5rem', fontSize: '0.875rem', color: colors.textSecondary }">
+          Press <kbd :style="{ padding: '0.25rem 0.5rem', backgroundColor: colors.bgSecondary, borderRadius: '0.25rem', fontFamily: 'monospace' }">?</kbd> for keyboard shortcuts
+        </p>
+      </div>
+    </div>
+    
     <!-- Filmstrip + Viewer Mode -->
-    <div v-if="viewMode === 'filmstrip'" :style="{ flex: '1 1 0', display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden', backgroundColor: colors.bgSecondary }">
+    <div v-else-if="viewMode === 'filmstrip'" :style="{ flex: '1 1 0', display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'hidden', backgroundColor: colors.bgSecondary }">
       <Filmstrip
         :images="images"
         :selected-indices="selectedIndices"
