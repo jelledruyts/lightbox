@@ -6,7 +6,7 @@ import ImageViewer from './components/ImageViewer.vue'
 import ImageThumbnail from './components/ImageThumbnail.vue'
 import StatusBar from './components/StatusBar.vue'
 import { useImageLoader } from './composables/useImageLoader'
-import type { TriageState } from './types'
+import type { TriageState, ViewMode } from './types'
 
 interface TriageHistoryEntry {
   changes: Array<{
@@ -28,7 +28,8 @@ const triageHistory = ref<TriageHistoryEntry[]>([])
 const redoHistory = ref<TriageHistoryEntry[]>([])
 const theme = ref<Theme>('system')
 const folderHandle = ref<FileSystemDirectoryHandle | null>(null)
-const viewMode = ref<'filmstrip' | 'grid'>('filmstrip')
+const viewMode = ref<ViewMode>('filmstrip')
+const detailViewIndex = ref(0)
 const showHelpModal = ref(false)
 const toolbarRef = ref<{ openFolder: () => void } | null>(null)
 const showConfirmModal = ref(false)
@@ -211,11 +212,28 @@ function getThemeIcon() {
 }
 
 function toggleViewMode() {
-  viewMode.value = viewMode.value === 'filmstrip' ? 'grid' : 'filmstrip'
+  if (viewMode.value === 'filmstrip') {
+    viewMode.value = 'grid'
+  } else if (viewMode.value === 'grid') {
+    viewMode.value = 'detail'
+  } else {
+    viewMode.value = 'filmstrip'
+  }
 }
 
 function getViewModeIcon() {
-  return viewMode.value === 'filmstrip' ? '▦' : '▬'
+  if (viewMode.value === 'filmstrip') return '▦'
+  if (viewMode.value === 'grid') return '▬'
+  return '◉'
+}
+
+// Detail view navigation
+function navigateDetailView(direction: number) {
+  const selectedArray = Array.from(selectedIndices.value).sort((a, b) => a - b)
+  if (selectedArray.length === 0) return
+  
+  detailViewIndex.value = (detailViewIndex.value + direction + selectedArray.length) % selectedArray.length
+  currentFocusIndex.value = selectedArray[detailViewIndex.value]
 }
 
 // Computed properties for button states
@@ -603,6 +621,14 @@ function handleKeyDown(event: KeyboardEvent) {
     return
   }
   
+  // Switch to Detail view with D
+  if (event.key === 'd' || event.key === 'D') {
+    event.preventDefault()
+    viewMode.value = 'detail'
+    detailViewIndex.value = 0
+    return
+  }
+  
   // Delete selected images with Delete key
   if (event.key === 'Delete' && !event.ctrlKey && !event.metaKey) {
     event.preventDefault()
@@ -678,6 +704,13 @@ function handleKeyDown(event: KeyboardEvent) {
   
   if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') {
     event.preventDefault()
+    
+    // In detail view, navigate through selected images
+    if (viewMode.value === 'detail') {
+      const direction = event.key === 'ArrowLeft' ? -1 : 1
+      navigateDetailView(direction)
+      return
+    }
     
     if (filteredIndices.value.length === 0) return
     
@@ -873,6 +906,17 @@ function redoTriageChange() {
   // Save triage states after redo
   saveTriageStates()
 }
+
+// Watch for view mode changes to set proper focus in detail view
+watch(viewMode, (newMode) => {
+  if (newMode === 'detail') {
+    const selectedArray = Array.from(selectedIndices.value).sort((a, b) => a - b)
+    if (selectedArray.length > 0) {
+      detailViewIndex.value = 0
+      currentFocusIndex.value = selectedArray[0]
+    }
+  }
+})
 
 onMounted(() => {
   window.addEventListener('keydown', handleKeyDown)
@@ -1214,7 +1258,7 @@ onUnmounted(() => {
     </div>
     
     <!-- Grid View Mode -->
-    <div v-else :style="{ flex: '1', overflow: 'auto', padding: '0.5rem', backgroundColor: colors.bgSecondary }">
+    <div v-else-if="viewMode === 'grid'" :style="{ flex: '1', overflow: 'auto', padding: '0.5rem', backgroundColor: colors.bgSecondary }">
       <div :style="{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: '0.5rem', maxWidth: '100%', justifyItems: 'center' }">
         <ImageThumbnail
           v-for="(image, index) in images"
@@ -1230,6 +1274,106 @@ onUnmounted(() => {
           @mouseenter="currentFocusIndex = index"
           @mouseleave="currentFocusIndex = null"
         />
+      </div>
+    </div>
+    
+    <!-- Detail View Mode -->
+    <div v-else-if="viewMode === 'detail'" :style="{ flex: '1', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bgSecondary, position: 'relative', padding: '1rem' }">
+      <div v-if="selectedIndices.size === 0" :style="{ color: colors.textSecondary, fontSize: '1.125rem' }">
+        No images selected. Select images to view in detail mode.
+      </div>
+      <div v-else :style="{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative' }">
+        <!-- Navigation buttons -->
+        <button
+          v-if="selectedIndices.size > 1"
+          @click="navigateDetailView(-1)"
+          :style="{
+            position: 'absolute',
+            left: '1rem',
+            top: '50%',
+            transform: 'translateY(-50%)',
+            padding: '1rem',
+            backgroundColor: colors.buttonBg,
+            color: colors.text,
+            border: 'none',
+            borderRadius: '50%',
+            cursor: 'pointer',
+            fontSize: '1.5rem',
+            opacity: '0.8',
+            transition: 'opacity 0.2s',
+            zIndex: 10,
+            width: '3rem',
+            height: '3rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }"
+          @mouseover="($event.currentTarget as HTMLElement).style.opacity = '1'"
+          @mouseout="($event.currentTarget as HTMLElement).style.opacity = '0.8'"
+          title="Previous image (Left arrow)"
+        >
+          ‹
+        </button>
+        
+        <button
+          v-if="selectedIndices.size > 1"
+          @click="navigateDetailView(1)"
+          :style="{
+            position: 'absolute',
+            right: '1rem',
+            top: '50%',
+            transform: 'translateY(-50%)',
+            padding: '1rem',
+            backgroundColor: colors.buttonBg,
+            color: colors.text,
+            border: 'none',
+            borderRadius: '50%',
+            cursor: 'pointer',
+            fontSize: '1.5rem',
+            opacity: '0.8',
+            transition: 'opacity 0.2s',
+            zIndex: 10,
+            width: '3rem',
+            height: '3rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }"
+          @mouseover="($event.currentTarget as HTMLElement).style.opacity = '1'"
+          @mouseout="($event.currentTarget as HTMLElement).style.opacity = '0.8'"
+          title="Next image (Right arrow)"
+        >
+          ›
+        </button>
+        
+        <!-- Current image display -->
+        <div :style="{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }">
+          <img
+            v-if="currentFocusIndex !== null"
+            :src="images[currentFocusIndex].url"
+            :style="{
+              maxWidth: '100%',
+              maxHeight: '100%',
+              objectFit: 'contain'
+            }"
+          />
+        </div>
+        
+        <!-- Image counter and triage indicator -->
+        <div :style="{ position: 'absolute', bottom: '1rem', left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: '1rem', alignItems: 'center', backgroundColor: colors.bg, padding: '0.5rem 1rem', borderRadius: '0.5rem', border: `1px solid ${colors.border}` }">
+          <span :style="{ color: colors.text, fontSize: '0.875rem' }">
+            {{ detailViewIndex + 1 }} / {{ selectedIndices.size }}
+          </span>
+          <div :style="{ width: '1px', height: '1rem', backgroundColor: colors.border }"></div>
+          <div :style="{ display: 'flex', gap: '0.5rem', alignItems: 'center' }">
+            <span v-if="currentFocusIndex !== null" :style="{ color: colors.text, fontSize: '0.875rem' }">
+              {{ images[currentFocusIndex].name }}
+            </span>
+            <span v-if="currentFocusIndex !== null && triageStates.get(currentFocusIndex) === 'accepted'" :style="{ color: '#10b981' }">✓</span>
+            <span v-if="currentFocusIndex !== null && triageStates.get(currentFocusIndex) === 'rejected'" :style="{ color: '#ef4444' }">✗</span>
+            <span v-if="currentFocusIndex !== null && !triageStates.get(currentFocusIndex)" :style="{ color: colors.textSecondary }">○</span>
+          </div>
+        </div>
       </div>
     </div>
     
@@ -1417,6 +1561,10 @@ onUnmounted(() => {
               <div :style="{ display: 'flex', justifyContent: 'space-between' }">
                 <span>Grid view</span>
                 <kbd :style="{ padding: '0.25rem 0.5rem', backgroundColor: colors.bgSecondary, borderRadius: '0.25rem', fontSize: '0.875rem' }">G</kbd>
+              </div>
+              <div :style="{ display: 'flex', justifyContent: 'space-between' }">
+                <span>Detail view</span>
+                <kbd :style="{ padding: '0.25rem 0.5rem', backgroundColor: colors.bgSecondary, borderRadius: '0.25rem', fontSize: '0.875rem' }">D</kbd>
               </div>
             </div>
           </div>

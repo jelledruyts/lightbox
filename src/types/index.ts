@@ -1,5 +1,7 @@
 export type TriageState = 'untriaged' | 'accepted' | 'rejected'
 
+export type ViewMode = 'filmstrip' | 'grid' | 'detail'
+
 export interface ImageFile {
   file: File
   url: string
