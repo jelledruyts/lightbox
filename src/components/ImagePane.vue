@@ -14,6 +14,16 @@ const props = defineProps<{
   sharedZoom: number
   sharedPanX: number
   sharedPanY: number
+  isDetailView?: boolean
+  colors?: {
+    bg: string
+    bgSecondary: string
+    border: string
+    text: string
+    textSecondary: string
+    buttonBg: string
+    buttonHoverBg: string
+  }
 }>()
 
 const emit = defineEmits<{
@@ -132,13 +142,13 @@ function handleTriageClick(state: TriageState) {
 <template>
   <div
     :style="{
-      position: 'absolute',
-      left: x + 'px',
-      top: y + 'px',
-      width: width + 'px',
-      height: height + 'px',
+      position: isDetailView ? 'static' : 'absolute',
+      left: isDetailView ? 'auto' : x + 'px',
+      top: isDetailView ? 'auto' : y + 'px',
+      width: isDetailView ? '100%' : width + 'px',
+      height: isDetailView ? '100%' : height + 'px',
       overflow: 'hidden',
-      backgroundColor: '#2d2d2d'
+      backgroundColor: colors?.bgSecondary || '#2d2d2d'
     }"
     @mouseenter="isHovered = true"
     @mouseleave="isHovered = false"

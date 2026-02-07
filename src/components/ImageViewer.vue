@@ -96,6 +96,7 @@ function resetZoom() {
       :shared-zoom="sharedZoom"
       :shared-pan-x="sharedPanX"
       :shared-pan-y="sharedPanY"
+      :colors="colors"
       @triage-change="handleTriageChange"
       @deselect="handleDeselect"
       @zoom-change="handleZoomChange"

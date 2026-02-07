@@ -3,6 +3,7 @@ import { ref, onUnmounted, onMounted, computed, watch } from 'vue'
 import Toolbar from './components/Toolbar.vue'
 import Filmstrip from './components/Filmstrip.vue'
 import ImageViewer from './components/ImageViewer.vue'
+import ImagePane from './components/ImagePane.vue'
 import ImageThumbnail from './components/ImageThumbnail.vue'
 import StatusBar from './components/StatusBar.vue'
 import { useImageLoader } from './composables/useImageLoader'
@@ -30,6 +31,9 @@ const theme = ref<Theme>('system')
 const folderHandle = ref<FileSystemDirectoryHandle | null>(null)
 const viewMode = ref<ViewMode>('filmstrip')
 const detailViewIndex = ref(0)
+const detailZoom = ref(1)
+const detailPanX = ref(0)
+const detailPanY = ref(0)
 const showHelpModal = ref(false)
 const toolbarRef = ref<{ openFolder: () => void } | null>(null)
 const showConfirmModal = ref(false)
@@ -234,6 +238,21 @@ function navigateDetailView(direction: number) {
   
   detailViewIndex.value = (detailViewIndex.value + direction + selectedArray.length) % selectedArray.length
   currentFocusIndex.value = selectedArray[detailViewIndex.value]
+}
+
+function handleDetailZoomChange(newZoom: number) {
+  detailZoom.value = newZoom
+}
+
+function handleDetailPanChange(panX: number, panY: number) {
+  detailPanX.value = panX
+  detailPanY.value = panY
+}
+
+function resetDetailZoom() {
+  detailZoom.value = 1
+  detailPanX.value = 0
+  detailPanY.value = 0
 }
 
 // Computed properties for button states
@@ -673,13 +692,14 @@ function handleKeyDown(event: KeyboardEvent) {
     return
   }
   
-  // Triage keyboard shortcuts (apply to all selected)
+  // Triage keyboard shortcuts (apply to all selected, except in detail view)
   if (event.key === 'p' || event.key === 'P') {
     event.preventDefault()
     if (currentFocusIndex.value !== null) {
       const currentState = triageStates.value.get(currentFocusIndex.value) || 'untriaged'
       const newState = currentState === 'accepted' ? 'untriaged' : 'accepted'
-      handleTriageChange(currentFocusIndex.value, newState, true)
+      const applyToAll = viewMode.value !== 'detail'
+      handleTriageChange(currentFocusIndex.value, newState, applyToAll)
     }
     return
   }
@@ -689,7 +709,8 @@ function handleKeyDown(event: KeyboardEvent) {
     if (currentFocusIndex.value !== null) {
       const currentState = triageStates.value.get(currentFocusIndex.value) || 'untriaged'
       const newState = currentState === 'rejected' ? 'untriaged' : 'rejected'
-      handleTriageChange(currentFocusIndex.value, newState, true)
+      const applyToAll = viewMode.value !== 'detail'
+      handleTriageChange(currentFocusIndex.value, newState, applyToAll)
     }
     return
   }
@@ -697,7 +718,8 @@ function handleKeyDown(event: KeyboardEvent) {
   if (event.key === 'u' || event.key === 'U') {
     event.preventDefault()
     if (currentFocusIndex.value !== null) {
-      handleTriageChange(currentFocusIndex.value, 'untriaged', true)
+      const applyToAll = viewMode.value !== 'detail'
+      handleTriageChange(currentFocusIndex.value, 'untriaged', applyToAll)
     }
     return
   }
@@ -1278,11 +1300,11 @@ onUnmounted(() => {
     </div>
     
     <!-- Detail View Mode -->
-    <div v-else-if="viewMode === 'detail'" :style="{ flex: '1', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bgSecondary, position: 'relative', padding: '1rem' }">
-      <div v-if="selectedIndices.size === 0" :style="{ color: colors.textSecondary, fontSize: '1.125rem' }">
+    <div v-else-if="viewMode === 'detail'" :style="{ flex: '1', display: 'flex', flexDirection: 'column', backgroundColor: colors.bgSecondary, position: 'relative', overflow: 'hidden' }">
+      <div v-if="selectedIndices.size === 0" :style="{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: colors.textSecondary, fontSize: '1.125rem' }">
         No images selected. Select images to view in detail mode.
       </div>
-      <div v-else :style="{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', position: 'relative' }">
+      <div v-else :style="{ position: 'relative', width: '100%', height: '100%' }">
         <!-- Navigation buttons -->
         <button
           v-if="selectedIndices.size > 1"
@@ -1346,21 +1368,30 @@ onUnmounted(() => {
           ›
         </button>
         
-        <!-- Current image display -->
-        <div :style="{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }">
-          <img
-            v-if="currentFocusIndex !== null"
-            :src="images[currentFocusIndex].url"
-            :style="{
-              maxWidth: '100%',
-              maxHeight: '100%',
-              objectFit: 'contain'
-            }"
-          />
-        </div>
+        <!-- Current image with zoom/pan support -->
+        <ImagePane
+          v-if="currentFocusIndex !== null"
+          :image-url="images[currentFocusIndex].url"
+          :image-name="images[currentFocusIndex].name"
+          :image-index="currentFocusIndex"
+          :triage-state="triageStates.get(currentFocusIndex)"
+          :width="0"
+          :height="0"
+          :x="0"
+          :y="0"
+          :shared-zoom="detailZoom"
+          :shared-pan-x="detailPanX"
+          :shared-pan-y="detailPanY"
+          :is-detail-view="true"
+          :colors="colors"
+          @triage-change="(idx, state) => handleTriageChange(idx, state, false)"
+          @zoom-change="handleDetailZoomChange"
+          @pan-change="handleDetailPanChange"
+          @reset-zoom="resetDetailZoom"
+        />
         
         <!-- Image counter and triage indicator -->
-        <div :style="{ position: 'absolute', bottom: '1rem', left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: '1rem', alignItems: 'center', backgroundColor: colors.bg, padding: '0.5rem 1rem', borderRadius: '0.5rem', border: `1px solid ${colors.border}` }">
+        <div :style="{ position: 'absolute', bottom: '1rem', left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: '1rem', alignItems: 'center', backgroundColor: colors.bg, padding: '0.5rem 1rem', borderRadius: '0.5rem', border: `1px solid ${colors.border}`, zIndex: 5 }">
           <span :style="{ color: colors.text, fontSize: '0.875rem' }">
             {{ detailViewIndex + 1 }} / {{ selectedIndices.size }}
           </span>
