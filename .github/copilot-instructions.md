@@ -4,6 +4,10 @@
 
 Lightbox is a single-page Vue.js application for viewing and comparing images from local folders. It uses the File System Access API (Chromium browsers only) to allow users to open a folder, view images in a filmstrip, and display selected images in a smart layout optimized for comparison.
 
+## Git Safety
+
+- Never create commits, amend commits, or push to Git unless the user has explicitly approved that action for the current task.
+
 ## Build, Test, and Lint Commands
 
 ```bash
@@ -59,6 +63,18 @@ Located in `src/utils/layoutAlgorithm.ts`. Algorithm:
 - Composition API with `<script setup>`
 - TypeScript props/emits using type generics
 - Reactive state with `ref()` and `computed()`
+
+### Vue Best Practices for Agents
+- Prefer small, reusable components over duplicating markup, behavior, or styling across views.
+- If similar UI or interaction logic appears in more than one place, extract a shared component or composable instead of maintaining parallel implementations.
+- Keep presentational components focused on props, emits, and slots; keep side effects and stateful orchestration in higher-level components or composables.
+- Reuse existing components and composables before introducing new ones; extend shared APIs thoughtfully instead of cloning functionality.
+- Prefer derived state with `computed()` over duplicated mutable state, and keep a single source of truth for selection, layout, and viewer state.
+- Use clear component contracts: typed props, typed emits, and minimal coupling between parent and child components.
+- Extract repeated browser API, event-handling, or image-processing logic into composables when it is not purely presentational.
+- Avoid large monolithic components when behavior can be split into cohesive subcomponents without fragmenting the flow.
+- Preserve accessibility and predictable behavior when extracting reusable pieces, especially for keyboard, pointer, and selection interactions.
+- When choosing between a quick local duplication and a reusable abstraction, favor the reusable abstraction if it keeps the API clear and matches existing project patterns.
 
 ### Image Selection
 - Single click: select only that image

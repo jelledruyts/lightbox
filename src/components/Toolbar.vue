@@ -41,7 +41,6 @@ async function openFolder() {
       }
     }
 
-    imageFiles.sort((a, b) => a.name.localeCompare(b.name))
     emit('folderSelected', imageFiles, dirHandle)
   } catch (error) {
     if ((error as Error).name !== 'AbortError') {

@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { ref, onUnmounted, onMounted, computed, watch } from 'vue'
 import Toolbar from './components/Toolbar.vue'
+import ToolbarSelect from './components/ToolbarSelect.vue'
 import Filmstrip from './components/Filmstrip.vue'
 import ImageViewer from './components/ImageViewer.vue'
 import ImagePane from './components/ImagePane.vue'
 import ImageThumbnail from './components/ImageThumbnail.vue'
 import StatusBar from './components/StatusBar.vue'
 import { useImageLoader } from './composables/useImageLoader'
-import type { TriageState, ViewMode } from './types'
+import { sortImages } from './utils/imageSorting'
+import type { ImageFile, ImageSortOption, TriageState, ViewMode } from './types'
 
 interface TriageHistoryEntry {
   changes: Array<{
@@ -17,6 +19,11 @@ interface TriageHistoryEntry {
 }
 
 type Theme = 'system' | 'light' | 'dark'
+
+interface SortOptionDefinition {
+  value: ImageSortOption
+  label: string
+}
 
 const { images, loadImages, cleanup } = useImageLoader()
 const selectedIndices = ref<Set<number>>(new Set())
@@ -39,6 +46,12 @@ const toolbarRef = ref<{ openFolder: () => void } | null>(null)
 const showConfirmModal = ref(false)
 const confirmModalMessage = ref('')
 const confirmModalCallback = ref<(() => void) | null>(null)
+const sortOption = ref<ImageSortOption>('date-taken')
+
+const sortOptions: SortOptionDefinition[] = [
+  { value: 'date-taken', label: 'Date taken' },
+  { value: 'filename', label: 'Filename' }
+]
 
 function showConfirmation(message: string, onConfirm: () => void) {
   confirmModalMessage.value = message
@@ -57,6 +70,108 @@ function handleConfirm() {
 function handleCancel() {
   showConfirmModal.value = false
   confirmModalCallback.value = null
+}
+
+function remapIndex(index: number | null, indexMap: Map<number, number>) {
+  if (index === null) {
+    return null
+  }
+
+  return indexMap.get(index) ?? null
+}
+
+function remapIndexArray(indices: number[], indexMap: Map<number, number>) {
+  return indices
+    .map(index => indexMap.get(index))
+    .filter((index): index is number => index !== undefined)
+}
+
+function remapIndexSet(indices: Set<number>, indexMap: Map<number, number>) {
+  return new Set(remapIndexArray(Array.from(indices), indexMap))
+}
+
+function remapTriageStateMap(indexMap: Map<number, number>) {
+  const nextTriageStates = new Map<number, TriageState>()
+
+  for (const [index, state] of triageStates.value.entries()) {
+    const nextIndex = indexMap.get(index)
+    if (nextIndex !== undefined) {
+      nextTriageStates.set(nextIndex, state)
+    }
+  }
+
+  triageStates.value = nextTriageStates
+}
+
+function remapHistoryEntries(indexMap: Map<number, number>, historyEntries: TriageHistoryEntry[]) {
+  return historyEntries.map(entry => ({
+    changes: entry.changes
+      .map(change => {
+        const nextIndex = indexMap.get(change.index)
+        return nextIndex === undefined
+          ? null
+          : {
+              index: nextIndex,
+              previousState: change.previousState
+            }
+      })
+      .filter((change): change is TriageHistoryEntry['changes'][number] => change !== null)
+  }))
+}
+
+function syncDetailViewIndex() {
+  if (viewMode.value !== 'detail') {
+    return
+  }
+
+  const selectedArray = Array.from(selectedIndices.value).sort((a, b) => a - b)
+  if (selectedArray.length === 0 || currentFocusIndex.value === null) {
+    detailViewIndex.value = 0
+    return
+  }
+
+  const focusedIndex = selectedArray.indexOf(currentFocusIndex.value)
+  detailViewIndex.value = focusedIndex >= 0 ? focusedIndex : 0
+}
+
+function applySort(nextSortOption: ImageSortOption) {
+  if (images.value.length < 2) {
+    return
+  }
+
+  const currentImages = [...images.value]
+  const sortedImages = sortImages(currentImages, nextSortOption)
+
+  if (sortedImages.every((image, index) => image === currentImages[index])) {
+    return
+  }
+
+  const oldIndexByImage = new Map<ImageFile, number>()
+  currentImages.forEach((image, index) => {
+    oldIndexByImage.set(image, index)
+  })
+
+  const indexMap = new Map<number, number>()
+  sortedImages.forEach((image, index) => {
+    const previousIndex = oldIndexByImage.get(image)
+    if (previousIndex !== undefined) {
+      indexMap.set(previousIndex, index)
+    }
+  })
+
+  images.value.splice(0, images.value.length, ...sortedImages)
+  selectedIndices.value = remapIndexSet(selectedIndices.value, indexMap)
+  selectionOrder.value = remapIndexArray(selectionOrder.value, indexMap)
+  lastSelectedIndex.value = remapIndex(lastSelectedIndex.value, indexMap)
+  currentFocusIndex.value = remapIndex(currentFocusIndex.value, indexMap)
+  remapTriageStateMap(indexMap)
+  triageHistory.value = remapHistoryEntries(indexMap, triageHistory.value)
+  redoHistory.value = remapHistoryEntries(indexMap, redoHistory.value)
+  syncDetailViewIndex()
+
+  if (currentFocusIndex.value !== null) {
+    scrollToImage(currentFocusIndex.value)
+  }
 }
 
 const isDarkMode = computed(() => {
@@ -514,7 +629,7 @@ async function handleFolderSelected(files: File[], dirHandle: FileSystemDirector
   redoHistory.value = []
   folderHandle.value = dirHandle
   
-  await loadImages(files)
+  await loadImages(files, sortOption.value)
   
   // Load saved triage states after images are loaded
   loadTriageStates()
@@ -529,6 +644,15 @@ async function handleFolderSelected(files: File[], dirHandle: FileSystemDirector
       currentFocusIndex.value = firstVisibleIndex
     }
   }
+}
+
+function handleSortOptionChange(nextSortOption: string) {
+  if (nextSortOption !== 'date-taken' && nextSortOption !== 'filename') {
+    return
+  }
+
+  sortOption.value = nextSortOption
+  applySort(nextSortOption)
 }
 
 function handleImageSelect(index: number, event: MouseEvent) {
@@ -960,6 +1084,10 @@ watch(viewMode, (newMode) => {
   }
 })
 
+watch(sortOption, (nextSortOption) => {
+  localStorage.setItem('lightbox-sort', nextSortOption)
+})
+
 onMounted(() => {
   window.addEventListener('keydown', handleKeyDown)
   
@@ -978,6 +1106,11 @@ onMounted(() => {
   const savedTheme = localStorage.getItem('theme') as Theme | null
   if (savedTheme && ['system', 'light', 'dark'].includes(savedTheme)) {
     theme.value = savedTheme
+  }
+
+  const savedSortOption = localStorage.getItem('lightbox-sort')
+  if (savedSortOption === 'date-taken' || savedSortOption === 'filename') {
+    sortOption.value = savedSortOption
   }
   
   // Listen for system theme changes
@@ -1005,6 +1138,13 @@ onUnmounted(() => {
   <div :style="{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', backgroundColor: colors.bg, color: colors.text }">
     <Toolbar ref="toolbarRef" :colors="colors" @folder-selected="handleFolderSelected">
       <template #actions>
+        <ToolbarSelect
+          label="Sort"
+          :model-value="sortOption"
+          :options="sortOptions"
+          :colors="colors"
+          @update:model-value="handleSortOptionChange"
+        />
         <button
           v-if="images.length > 0"
           @click="selectAll"

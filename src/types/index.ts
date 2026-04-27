@@ -2,11 +2,14 @@ export type TriageState = 'untriaged' | 'accepted' | 'rejected'
 
 export type ViewMode = 'filmstrip' | 'grid' | 'detail'
 
+export type ImageSortOption = 'date-taken' | 'filename'
+
 export interface ImageFile {
   file: File
   url: string
   name: string
   aspectRatio: number
+  dateTaken: number | null
 }
 
 export interface ImageSelection {
