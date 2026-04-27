@@ -30,8 +30,12 @@ const sharedZoom = ref(1)
 const sharedPanX = ref(0)
 const sharedPanY = ref(0)
 
+const orderedSelectedIndices = computed(() => {
+  return [...props.selectionOrder].sort((left, right) => left - right)
+})
+
 const selectedImages = computed(() => {
-  return props.selectionOrder.map(index => props.images[index])
+  return orderedSelectedIndices.value.map(index => props.images[index])
 })
 
 const { layout, setViewerElement } = useSmartLayout(() => selectedImages.value)
@@ -89,9 +93,9 @@ function resetZoom() {
       :image-name="image.name"
       :camera-model="image.cameraModel"
       :aspect-ratio="image.aspectRatio"
-      :image-index="selectionOrder[index]"
-      :sequence-number="selectionOrder[index] + 1"
-      :triage-state="triageStates.get(selectionOrder[index])"
+      :image-index="orderedSelectedIndices[index]"
+      :sequence-number="orderedSelectedIndices[index] + 1"
+      :triage-state="triageStates.get(orderedSelectedIndices[index])"
       :width="layout.positions[index]?.width || 0"
       :height="layout.positions[index]?.height || 0"
       :x="layout.positions[index]?.x || 0"
