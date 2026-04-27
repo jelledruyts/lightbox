@@ -8,7 +8,6 @@ const props = defineProps<{
   cameraModel?: string | null
   imageIndex: number
   sequenceNumber: number
-  sequenceCount: number
   width: number
   height: number
   x: number
@@ -330,6 +329,13 @@ function handleTriageClick(state: TriageState) {
       }"
     >
       <span
+        :style="{
+          color: colors?.textSecondary || '#d1d5db'
+        }"
+      >
+        {{ sequenceNumber }}
+      </span>
+      <span
         :title="imageName"
         :style="{
           maxWidth: props.cameraModel ? '45%' : '100%',
@@ -354,7 +360,6 @@ function handleTriageClick(state: TriageState) {
       >
         {{ cameraModel }}
       </span>
-      <span>{{ sequenceNumber }} / {{ sequenceCount }}</span>
       <span :style="{ color: triageDisplay.color, fontWeight: '500' }">
         {{ triageDisplay.icon }} {{ triageDisplay.label }}
       </span>

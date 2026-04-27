@@ -72,6 +72,22 @@ function handleTriageClick(state: TriageState, event: MouseEvent) {
           pointerEvents: 'none'
         }"
       />
+      <div
+        :style="{
+          position: 'absolute',
+          bottom: '4px',
+          left: '4px',
+          padding: '1px 4px',
+          borderRadius: '999px',
+          backgroundColor: 'rgba(17, 24, 39, 0.7)',
+          color: 'rgba(255, 255, 255, 0.85)',
+          fontSize: '10px',
+          lineHeight: '1.2',
+          fontWeight: '500'
+        }"
+      >
+        {{ index + 1 }}
+      </div>
       <!-- Triage state indicator -->
       <div 
         v-if="triageState && triageState !== 'untriaged'"
