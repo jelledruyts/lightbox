@@ -52,7 +52,7 @@ function handleTriageClick(state: TriageState, event: MouseEvent) {
     }"
   >
     <div :style="{
-      backgroundColor: 'white',
+      backgroundColor: 'transparent',
       borderRadius: '2px',
       display: 'flex',
       alignItems: 'center',
