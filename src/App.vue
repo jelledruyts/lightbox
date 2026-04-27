@@ -1481,8 +1481,8 @@ onUnmounted(() => {
           :disabled="!canDelete"
           :style="{
             padding: '0.5rem 1rem',
-            backgroundColor: canDelete ? '#dc2626' : colors.border,
-            color: canDelete ? 'white' : colors.textSecondary,
+            backgroundColor: canDelete ? colors.buttonBg : colors.border,
+            color: canDelete ? colors.text : colors.textSecondary,
             borderRadius: '0.5rem',
             border: 'none',
             cursor: canDelete ? 'pointer' : 'not-allowed',
@@ -1491,8 +1491,8 @@ onUnmounted(() => {
             whiteSpace: 'nowrap',
             opacity: canDelete ? '1' : '0.5'
           }"
-          @mouseover="canDelete && (($event.currentTarget as HTMLElement).style.backgroundColor = '#b91c1c')"
-          @mouseout="($event.currentTarget as HTMLElement).style.backgroundColor = canDelete ? '#dc2626' : colors.border"
+          @mouseover="canDelete && (($event.currentTarget as HTMLElement).style.backgroundColor = colors.buttonHoverBg)"
+          @mouseout="($event.currentTarget as HTMLElement).style.backgroundColor = canDelete ? colors.buttonBg : colors.border"
           title="Delete selected images (Delete)"
         >
           🗑
@@ -1503,8 +1503,8 @@ onUnmounted(() => {
           :disabled="!canDeleteRejected"
           :style="{
             padding: '0.5rem 1rem',
-            backgroundColor: canDeleteRejected ? '#dc2626' : colors.border,
-            color: canDeleteRejected ? 'white' : colors.textSecondary,
+            backgroundColor: canDeleteRejected ? colors.buttonBg : colors.border,
+            color: canDeleteRejected ? colors.text : colors.textSecondary,
             borderRadius: '0.5rem',
             border: 'none',
             cursor: canDeleteRejected ? 'pointer' : 'not-allowed',
@@ -1513,8 +1513,8 @@ onUnmounted(() => {
             whiteSpace: 'nowrap',
             opacity: canDeleteRejected ? '1' : '0.5'
           }"
-          @mouseover="canDeleteRejected && (($event.currentTarget as HTMLElement).style.backgroundColor = '#b91c1c')"
-          @mouseout="($event.currentTarget as HTMLElement).style.backgroundColor = canDeleteRejected ? '#dc2626' : colors.border"
+          @mouseover="canDeleteRejected && (($event.currentTarget as HTMLElement).style.backgroundColor = colors.buttonHoverBg)"
+          @mouseout="($event.currentTarget as HTMLElement).style.backgroundColor = canDeleteRejected ? colors.buttonBg : colors.border"
           title="Delete rejected images (Ctrl+Delete)"
         >
           🗑✗
@@ -1563,16 +1563,6 @@ onUnmounted(() => {
         >
           ↷
         </button>
-        
-        <div v-if="images.length > 0" :style="{ width: '1px', height: '24px', backgroundColor: colors.border, margin: '0 0.5rem' }"></div>
-
-        <ToolbarSelect
-          v-if="images.length > 0"
-          :model-value="sortOption"
-          :options="sortOptions"
-          :colors="colors"
-          @update:model-value="handleSortOptionChange"
-        />
 
         <div v-if="images.length > 0" :style="{ width: '1px', height: '24px', backgroundColor: colors.border, margin: '0 0.5rem' }"></div>
         
@@ -1647,6 +1637,16 @@ onUnmounted(() => {
         
         <!-- Spacer to push theme and help buttons to the right -->
         <div :style="{ flex: '1' }"></div>
+
+        <div v-if="images.length > 0" :style="{ width: '1px', height: '24px', backgroundColor: colors.border, margin: '0 0.5rem' }"></div>
+
+        <ToolbarSelect
+          v-if="images.length > 0"
+          :model-value="sortOption"
+          :options="sortOptions"
+          :colors="colors"
+          @update:model-value="handleSortOptionChange"
+        />
         
         <!-- View mode button (conditional) -->
         <button
