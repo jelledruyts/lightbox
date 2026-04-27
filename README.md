@@ -7,6 +7,7 @@ A modern web-based image viewer for browsing, comparing, sorting, and triaging i
 - 📁 **Local Folder Access** - Open any folder from your computer using the File System Access API
 - 🔄 **Reload Support** - Reload the currently opened folder without reopening it
 - 🎞️ **Multiple View Modes** - Switch between compare, grid, and detail views
+- ⌨️ **Focused Compare Navigation** - Press Tab in compare view to scope navigation and triage shortcuts to the current selection
 - 🖼️ **Smart Layout** - Selected images are automatically arranged to optimally fill your viewport
 - 🔍 **Zoom & Pan** - Zoom and pan individual images for detailed comparison
 - ⌨️ **Multi-Select** - Select multiple images with click, Ctrl/Cmd + click, Shift + click, and keyboard navigation
@@ -68,6 +69,10 @@ npm run preview
     - Use **+/−** buttons or **mouse wheel** to zoom
     - **Click and drag** to pan
     - **⟲** to reset view
+8. In **compare view**, press **Tab** to enter selection focus mode:
+    - **← / →** cycle through the current selection without changing it
+    - **P / X / U** triage only the focused image
+    - Press **Tab** again, **Esc**, or click outside the compare panel to exit
 
 ## Technology Stack
 

@@ -8,7 +8,9 @@ const props = defineProps<{
   images: ImageFile[]
   selectedIndices: Set<number>
   selectionOrder: number[]
+  currentFocusIndex: number | null
   triageStates: Map<number, TriageState>
+  isSelectionFocusMode: boolean
   colors: {
     bg: string
     bgSecondary: string
@@ -78,7 +80,18 @@ function resetZoom() {
 </script>
 
 <template>
-  <div ref="viewerRef" :style="{ position: 'absolute', top: '0.5rem', left: '0.5rem', right: '0.5rem', bottom: '0.5rem', backgroundColor: colors.bgSecondary, overflow: 'hidden' }">
+  <div
+    ref="viewerRef"
+    :style="{
+      position: 'absolute',
+      top: '1rem',
+      left: '1rem',
+      right: '1rem',
+      bottom: '1rem',
+      backgroundColor: colors.bgSecondary,
+      overflow: 'hidden'
+    }"
+  >
     <div v-if="selectedIndices.size === 0" :style="{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: colors.textSecondary }">
       <div style="text-align: center;">
         <p style="font-size: 1.125rem; margin-bottom: 0.5rem;">No images selected</p>
@@ -104,6 +117,7 @@ function resetZoom() {
       :shared-zoom="sharedZoom"
       :shared-pan-x="sharedPanX"
       :shared-pan-y="sharedPanY"
+      :is-focused="isSelectionFocusMode && orderedSelectedIndices[index] === currentFocusIndex"
       :colors="colors"
       @triage-change="handleTriageChange"
       @deselect="handleDeselect"

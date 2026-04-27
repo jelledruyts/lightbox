@@ -20,6 +20,7 @@ const props = defineProps<{
   sharedZoom: number
   sharedPanX: number
   sharedPanY: number
+  isFocused?: boolean
   isDetailView?: boolean
   colors?: {
     bg: string
@@ -265,7 +266,10 @@ onUnmounted(() => {
       overflow: 'hidden',
       backgroundColor: colors?.bgSecondary || '#2d2d2d',
       display: 'flex',
-      flexDirection: 'column'
+      flexDirection: 'column',
+      boxSizing: 'border-box',
+      border: isFocused ? '2px solid #60a5fa' : 'none',
+      boxShadow: isFocused ? 'inset 0 0 0 1px rgba(147, 197, 253, 0.35)' : 'none'
     }"
   >
     <div

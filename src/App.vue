@@ -50,8 +50,10 @@ const detailZoom = ref(1)
 const detailPanX = ref(0)
 const detailPanY = ref(0)
 const showHelpModal = ref(false)
+const compareFocusMode = ref(false)
 const toolbarRef = ref<{ openFolder: () => void; reloadFolder: () => void } | null>(null)
 const importStateInputRef = ref<HTMLInputElement | null>(null)
+const compareViewerRef = ref<HTMLElement | null>(null)
 const showConfirmModal = ref(false)
 const confirmModalMessage = ref('')
 const confirmModalCallback = ref<(() => void) | null>(null)
@@ -88,6 +90,7 @@ const cameraModelOptions = computed<CameraModelOptionDefinition[]>(() => {
 
 const hasMultipleCameraModels = computed(() => cameraModelOptions.value.length > 1)
 const selectedCameraModelValues = computed(() => [...selectedCameraModels.value])
+const selectedImageIndices = computed(() => Array.from(selectedIndices.value).sort((a, b) => a - b))
 
 function showConfirmation(message: string, onConfirm: () => void) {
   confirmModalMessage.value = message
@@ -200,14 +203,39 @@ function syncDetailViewIndex() {
     return
   }
 
-  const selectedArray = Array.from(selectedIndices.value).sort((a, b) => a - b)
-  if (selectedArray.length === 0 || currentFocusIndex.value === null) {
+  if (selectedImageIndices.value.length === 0 || currentFocusIndex.value === null) {
     detailViewIndex.value = 0
     return
   }
 
-  const focusedIndex = selectedArray.indexOf(currentFocusIndex.value)
+  const focusedIndex = selectedImageIndices.value.indexOf(currentFocusIndex.value)
   detailViewIndex.value = focusedIndex >= 0 ? focusedIndex : 0
+}
+
+function enterCompareFocusMode() {
+  if (viewMode.value !== 'filmstrip' || selectedImageIndices.value.length === 0) {
+    return
+  }
+
+  currentFocusIndex.value = selectedImageIndices.value[0]
+  detailViewIndex.value = 0
+
+  compareFocusMode.value = true
+
+  scrollToImage(currentFocusIndex.value)
+}
+
+function exitCompareFocusMode() {
+  compareFocusMode.value = false
+}
+
+function toggleCompareFocusMode() {
+  if (compareFocusMode.value) {
+    exitCompareFocusMode()
+    return
+  }
+
+  enterCompareFocusMode()
 }
 
 function applySort(nextSortOption: ImageSortOption) {
@@ -668,13 +696,48 @@ function getViewModeIcon() {
   return '◉'
 }
 
+function focusSelectedImageAt(position: 'first' | 'last') {
+  if (selectedImageIndices.value.length === 0) {
+    return
+  }
+
+  const targetPosition = position === 'first' ? 0 : selectedImageIndices.value.length - 1
+  currentFocusIndex.value = selectedImageIndices.value[targetPosition]
+  detailViewIndex.value = targetPosition
+
+  if (currentFocusIndex.value !== null && viewMode.value === 'filmstrip') {
+    scrollToImage(currentFocusIndex.value)
+  }
+}
+
+function getFallbackSelectedFocusIndex(preferredIndex: number) {
+  return selectedImageIndices.value.find(index => index > preferredIndex)
+    ?? selectedImageIndices.value[selectedImageIndices.value.length - 1]
+    ?? null
+}
+
+function navigateSelectedImages(direction: number) {
+  if (selectedImageIndices.value.length === 0) {
+    return
+  }
+
+  const currentSelectedPosition = currentFocusIndex.value === null
+    ? -1
+    : selectedImageIndices.value.indexOf(currentFocusIndex.value)
+  const startPosition = currentSelectedPosition >= 0 ? currentSelectedPosition : 0
+  const nextPosition = (startPosition + direction + selectedImageIndices.value.length) % selectedImageIndices.value.length
+
+  currentFocusIndex.value = selectedImageIndices.value[nextPosition]
+  detailViewIndex.value = nextPosition
+
+  if (currentFocusIndex.value !== null && viewMode.value === 'filmstrip') {
+    scrollToImage(currentFocusIndex.value)
+  }
+}
+
 // Detail view navigation
 function navigateDetailView(direction: number) {
-  const selectedArray = Array.from(selectedIndices.value).sort((a, b) => a - b)
-  if (selectedArray.length === 0) return
-  
-  detailViewIndex.value = (detailViewIndex.value + direction + selectedArray.length) % selectedArray.length
-  currentFocusIndex.value = selectedArray[detailViewIndex.value]
+  navigateSelectedImages(direction)
 }
 
 function handleDetailZoomChange(newZoom: number) {
@@ -699,12 +762,11 @@ function handleDetailViewDeselect(index: number) {
   
   // If there are still selected images, navigate to the next one
   if (selectedIndices.value.size > 0) {
-    const selectedArray = Array.from(selectedIndices.value).sort((a, b) => a - b)
     // Stay at the same position if possible, or go to the previous one
-    if (detailViewIndex.value >= selectedArray.length) {
-      detailViewIndex.value = selectedArray.length - 1
+    if (detailViewIndex.value >= selectedImageIndices.value.length) {
+      detailViewIndex.value = selectedImageIndices.value.length - 1
     }
-    currentFocusIndex.value = selectedArray[detailViewIndex.value]
+    currentFocusIndex.value = selectedImageIndices.value[detailViewIndex.value]
   } else {
     // No more selected images, exit detail view
     viewMode.value = 'filmstrip'
@@ -1011,7 +1073,9 @@ function handleImageSelect(index: number, event: MouseEvent) {
   }
   
   lastSelectedIndex.value = index
-  currentFocusIndex.value = index
+  currentFocusIndex.value = selectedIndices.value.has(index)
+    ? index
+    : getFallbackSelectedFocusIndex(index)
 }
 
 function handleKeyDown(event: KeyboardEvent) {
@@ -1025,6 +1089,12 @@ function handleKeyDown(event: KeyboardEvent) {
     if (showHelpModal.value) {
       event.preventDefault()
       showHelpModal.value = false
+      return
+    }
+
+    if (compareFocusMode.value) {
+      event.preventDefault()
+      exitCompareFocusMode()
       return
     }
   }
@@ -1058,6 +1128,12 @@ function handleKeyDown(event: KeyboardEvent) {
   }
   
   if (images.value.length === 0) return
+
+  if (event.key === 'Tab' && viewMode.value === 'filmstrip') {
+    event.preventDefault()
+    toggleCompareFocusMode()
+    return
+  }
   
   // Select All with Ctrl+A
   if ((event.ctrlKey || event.metaKey) && event.key === 'a') {
@@ -1154,6 +1230,11 @@ function handleKeyDown(event: KeyboardEvent) {
   // Home key - select first image
   if (event.key === 'Home') {
     event.preventDefault()
+    if (viewMode.value === 'filmstrip' && compareFocusMode.value) {
+      focusSelectedImageAt('first')
+      return
+    }
+
     if (filteredIndices.value.length > 0) {
       const firstIndex = filteredIndices.value[0]
       currentFocusIndex.value = firstIndex
@@ -1169,6 +1250,11 @@ function handleKeyDown(event: KeyboardEvent) {
   // End key - select last image
   if (event.key === 'End') {
     event.preventDefault()
+    if (viewMode.value === 'filmstrip' && compareFocusMode.value) {
+      focusSelectedImageAt('last')
+      return
+    }
+
     if (filteredIndices.value.length > 0) {
       const lastIndex = filteredIndices.value[filteredIndices.value.length - 1]
       currentFocusIndex.value = lastIndex
@@ -1187,7 +1273,7 @@ function handleKeyDown(event: KeyboardEvent) {
     if (currentFocusIndex.value !== null) {
       const currentState = triageStates.value.get(currentFocusIndex.value) || 'untriaged'
       const newState = currentState === 'accepted' ? 'untriaged' : 'accepted'
-      const applyToAll = viewMode.value !== 'detail'
+      const applyToAll = viewMode.value !== 'detail' && !(viewMode.value === 'filmstrip' && compareFocusMode.value)
       handleTriageChange(currentFocusIndex.value, newState, applyToAll)
     }
     return
@@ -1198,7 +1284,7 @@ function handleKeyDown(event: KeyboardEvent) {
     if (currentFocusIndex.value !== null) {
       const currentState = triageStates.value.get(currentFocusIndex.value) || 'untriaged'
       const newState = currentState === 'rejected' ? 'untriaged' : 'rejected'
-      const applyToAll = viewMode.value !== 'detail'
+      const applyToAll = viewMode.value !== 'detail' && !(viewMode.value === 'filmstrip' && compareFocusMode.value)
       handleTriageChange(currentFocusIndex.value, newState, applyToAll)
     }
     return
@@ -1207,7 +1293,7 @@ function handleKeyDown(event: KeyboardEvent) {
   if (event.key === 'u' || event.key === 'U') {
     event.preventDefault()
     if (currentFocusIndex.value !== null) {
-      const applyToAll = viewMode.value !== 'detail'
+      const applyToAll = viewMode.value !== 'detail' && !(viewMode.value === 'filmstrip' && compareFocusMode.value)
       handleTriageChange(currentFocusIndex.value, 'untriaged', applyToAll)
     }
     return
@@ -1220,6 +1306,12 @@ function handleKeyDown(event: KeyboardEvent) {
     if (viewMode.value === 'detail') {
       const direction = event.key === 'ArrowLeft' ? -1 : 1
       navigateDetailView(direction)
+      return
+    }
+
+    if (viewMode.value === 'filmstrip' && compareFocusMode.value) {
+      const direction = event.key === 'ArrowLeft' ? -1 : 1
+      navigateSelectedImages(direction)
       return
     }
     
@@ -1259,6 +1351,20 @@ function handleKeyDown(event: KeyboardEvent) {
   }
 }
 
+function handleGlobalPointerDown(event: PointerEvent) {
+  if (!compareFocusMode.value || viewMode.value !== 'filmstrip') {
+    return
+  }
+
+  if (!(event.target instanceof Node)) {
+    return
+  }
+
+  if (!compareViewerRef.value?.contains(event.target)) {
+    exitCompareFocusMode()
+  }
+}
+
 function scrollToImage(index: number) {
   // Wait a tick for DOM to update, then scroll
   setTimeout(() => {
@@ -1284,11 +1390,18 @@ function selectAll() {
 function clearSelection() {
   selectedIndices.value.clear()
   selectionOrder.value = []
+  lastSelectedIndex.value = null
+  currentFocusIndex.value = null
+  exitCompareFocusMode()
 }
 
 function handleImageDeselect(index: number) {
   selectedIndices.value.delete(index)
   selectionOrder.value = selectionOrder.value.filter(i => i !== index)
+
+  if (currentFocusIndex.value === index) {
+    currentFocusIndex.value = getFallbackSelectedFocusIndex(index)
+  }
   
   // If we deselected the last image and there are still visible images, select the next one
   if (selectedIndices.value.size === 0 && filteredIndices.value.length > 0) {
@@ -1416,11 +1529,14 @@ function redoTriageChange() {
 
 // Watch for view mode changes to set proper focus in detail view
 watch(viewMode, (newMode) => {
+  if (newMode !== 'filmstrip') {
+    compareFocusMode.value = false
+  }
+
   if (newMode === 'detail') {
-    const selectedArray = Array.from(selectedIndices.value).sort((a, b) => a - b)
-    if (selectedArray.length > 0) {
+    if (selectedImageIndices.value.length > 0) {
       detailViewIndex.value = 0
-      currentFocusIndex.value = selectedArray[0]
+      currentFocusIndex.value = selectedImageIndices.value[0]
     }
   }
 })
@@ -1439,6 +1555,7 @@ watch(filmstripHeight, (height) => {
 
 onMounted(() => {
   window.addEventListener('keydown', handleKeyDown)
+  window.addEventListener('pointerdown', handleGlobalPointerDown, true)
   window.addEventListener('pointermove', handleFilmstripResize)
   window.addEventListener('pointerup', stopFilmstripResize)
   window.addEventListener('pointercancel', stopFilmstripResize)
@@ -1492,6 +1609,7 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
+  window.removeEventListener('pointerdown', handleGlobalPointerDown, true)
   window.removeEventListener('pointermove', handleFilmstripResize)
   window.removeEventListener('pointerup', stopFilmstripResize)
   window.removeEventListener('pointercancel', stopFilmstripResize)
@@ -1915,6 +2033,7 @@ onUnmounted(() => {
         :filtered-indices="filteredIndices"
         :height="filmstripHeight"
         :colors="colors"
+        :style="{ opacity: compareFocusMode ? 0.45 : 1, transition: 'opacity 0.2s ease' }"
         @select="handleImageSelect"
         @triage-change="handleTriageChange"
       />
@@ -1936,12 +2055,28 @@ onUnmounted(() => {
       >
         <div :style="{ width: '3rem', height: '2px', borderRadius: '999px', backgroundColor: colors.textSecondary, opacity: isResizingFilmstrip ? '1' : '0.6' }"></div>
       </div>
-      <div :style="{ flex: '1 1 0', overflow: 'hidden', minHeight: 0, position: 'relative' }">
+      <div
+        ref="compareViewerRef"
+        :style="{
+          flex: '1 1 0',
+          overflow: 'hidden',
+          minHeight: 0,
+          position: 'relative',
+          margin: '0.5rem',
+          borderRadius: '0.75rem',
+          border: '2px solid transparent',
+          borderColor: compareFocusMode ? '#60a5fa' : 'transparent',
+          boxShadow: compareFocusMode ? '0 0 0 4px rgba(96, 165, 250, 0.18)' : 'none',
+          transition: 'border-color 0.2s ease, box-shadow 0.2s ease'
+        }"
+      >
         <ImageViewer
           :images="images"
           :selected-indices="selectedIndices"
           :selection-order="selectionOrder"
+          :current-focus-index="currentFocusIndex"
           :triage-states="triageStates"
+          :is-selection-focus-mode="compareFocusMode"
           :colors="colors"
           @triage-change="handleTriageChange"
           @deselect="handleImageDeselect"
@@ -2166,6 +2301,10 @@ onUnmounted(() => {
                 <kbd :style="{ padding: '0.25rem 0.5rem', backgroundColor: colors.bgSecondary, borderRadius: '0.25rem', fontSize: '0.875rem' }">← →</kbd>
               </div>
               <div :style="{ display: 'flex', justifyContent: 'space-between' }">
+                <span>Toggle compare selection focus</span>
+                <kbd :style="{ padding: '0.25rem 0.5rem', backgroundColor: colors.bgSecondary, borderRadius: '0.25rem', fontSize: '0.875rem' }">Tab</kbd>
+              </div>
+              <div :style="{ display: 'flex', justifyContent: 'space-between' }">
                 <span>Expand selection</span>
                 <kbd :style="{ padding: '0.25rem 0.5rem', backgroundColor: colors.bgSecondary, borderRadius: '0.25rem', fontSize: '0.875rem' }">Shift + ← →</kbd>
               </div>
@@ -2214,6 +2353,10 @@ onUnmounted(() => {
               <div :style="{ display: 'flex', justifyContent: 'space-between' }">
                 <span>Mark as untriaged</span>
                 <kbd :style="{ padding: '0.25rem 0.5rem', backgroundColor: colors.bgSecondary, borderRadius: '0.25rem', fontSize: '0.875rem' }">U</kbd>
+              </div>
+              <div :style="{ display: 'flex', justifyContent: 'space-between', gap: '1rem' }">
+                <span>In compare focus mode, triage only the current selected image</span>
+                <kbd :style="{ padding: '0.25rem 0.5rem', backgroundColor: colors.bgSecondary, borderRadius: '0.25rem', fontSize: '0.875rem', whiteSpace: 'nowrap' }">Tab + P/X/U</kbd>
               </div>
               <div :style="{ display: 'flex', justifyContent: 'space-between' }">
                 <span>Undo</span>
