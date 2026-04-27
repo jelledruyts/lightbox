@@ -1,4 +1,5 @@
 export type TriageState = 'untriaged' | 'accepted' | 'rejected'
+export type ImageFilterState = TriageState | 'untriaged'
 
 export type ViewMode = 'filmstrip' | 'grid' | 'detail'
 
@@ -38,4 +39,18 @@ export interface ZoomPanState {
   zoom: number
   panX: number
   panY: number
+}
+
+export interface ExportedFolderStateImage {
+  path: string
+  triageState: TriageState
+}
+
+export interface ExportedFolderState {
+  version: 1
+  folderName: string | null
+  exportedAt: string
+  sortOption: ImageSortOption
+  activeFilters: ImageFilterState[]
+  images: ExportedFolderStateImage[]
 }

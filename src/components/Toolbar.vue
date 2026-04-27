@@ -108,31 +108,35 @@ defineExpose({
         {{ isLoading && loadingAction === 'open' ? 'Loading...' : 'Open Folder' }}
       </button>
       <button
+        v-if="currentFolderHandle"
         @click="reloadFolder"
-        :disabled="isLoading || !currentFolderHandle"
+        :disabled="isLoading"
         :style="{
           width: '2.5rem',
           height: '2.5rem',
-          backgroundColor: isLoading || !currentFolderHandle ? colors.border : colors.buttonBg,
-          color: isLoading || !currentFolderHandle ? colors.textSecondary : colors.text,
+          backgroundColor: isLoading ? colors.border : colors.buttonBg,
+          color: isLoading ? colors.textSecondary : colors.text,
           borderRadius: '0.5rem',
           border: 'none',
-          cursor: isLoading || !currentFolderHandle ? 'not-allowed' : 'pointer',
+          cursor: isLoading ? 'not-allowed' : 'pointer',
           fontWeight: '500',
           transition: 'background-color 0.2s',
-          opacity: isLoading || !currentFolderHandle ? '0.6' : '1',
+          opacity: isLoading ? '0.6' : '1',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           fontSize: '1.125rem',
           lineHeight: '1'
         }"
-        @mouseover="!isLoading && currentFolderHandle && (($event.currentTarget as HTMLElement).style.backgroundColor = colors.buttonHoverBg)"
-        @mouseout="($event.currentTarget as HTMLElement).style.backgroundColor = isLoading || !currentFolderHandle ? colors.border : colors.buttonBg"
+        @mouseover="!isLoading && (($event.currentTarget as HTMLElement).style.backgroundColor = colors.buttonHoverBg)"
+        @mouseout="($event.currentTarget as HTMLElement).style.backgroundColor = isLoading ? colors.border : colors.buttonBg"
         title="Reload the currently opened folder (R)"
       >
         {{ isLoading && loadingAction === 'reload' ? '…' : '↻' }}
       </button>
+      <div v-if="$slots['file-actions']" style="display: flex; align-items: center; gap: 0.5rem;">
+        <slot name="file-actions"></slot>
+      </div>
       <div v-if="!supportsFileSystemAccess" style="color: #dc2626; font-size: 0.875rem; font-weight: 500;">
         ⚠️ File System Access API not supported. Please use Chrome or Edge.
       </div>

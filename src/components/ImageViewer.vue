@@ -91,6 +91,7 @@ function resetZoom() {
       :key="image.url"
       :image-url="image.url"
       :image-name="image.name"
+      :date-taken="image.dateTaken"
       :camera-model="image.cameraModel"
       :aspect-ratio="image.aspectRatio"
       :image-index="orderedSelectedIndices[index]"

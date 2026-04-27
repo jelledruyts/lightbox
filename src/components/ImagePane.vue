@@ -5,6 +5,7 @@ import type { TriageState } from '../types'
 const props = defineProps<{
   imageUrl: string
   imageName: string
+  dateTaken?: number | null
   cameraModel?: string | null
   aspectRatio: number
   imageIndex: number
@@ -70,6 +71,17 @@ const triageDisplay = computed(() => {
     icon: '○',
     color: props.colors?.textSecondary || '#9ca3af'
   }
+})
+
+const dateTakenDisplay = computed(() => {
+  if (!props.dateTaken) {
+    return null
+  }
+
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: 'medium',
+    timeStyle: 'short'
+  }).format(new Date(props.dateTaken))
 })
 
 const imageBounds = computed(() => {
@@ -411,15 +423,31 @@ onUnmounted(() => {
       <span
         :title="imageName"
         :style="{
-          maxWidth: props.cameraModel ? '45%' : '100%',
+          maxWidth: dateTakenDisplay || props.cameraModel ? '35%' : '100%',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
           fontWeight: '500',
           color: colors?.text || '#f3f4f6'
         }"
+        >
+          {{ imageName }}
+      </span>
+      <span
+        v-if="dateTakenDisplay"
+        :style="{ color: colors?.textSecondary || '#d1d5db' }"
+      >|</span>
+      <span
+        v-if="dateTakenDisplay"
+        :title="dateTakenDisplay"
+        :style="{
+          maxWidth: cameraModel ? '22%' : '30%',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap'
+        }"
       >
-        {{ imageName }}
+        {{ dateTakenDisplay }}
       </span>
       <span
         v-if="cameraModel"
@@ -429,7 +457,7 @@ onUnmounted(() => {
         v-if="cameraModel"
         :title="cameraModel"
         :style="{
-          maxWidth: '35%',
+          maxWidth: dateTakenDisplay ? '22%' : '35%',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap'

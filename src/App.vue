@@ -8,8 +8,9 @@ import ImagePane from './components/ImagePane.vue'
 import ImageThumbnail from './components/ImageThumbnail.vue'
 import StatusBar from './components/StatusBar.vue'
 import { useImageLoader } from './composables/useImageLoader'
+import { createFolderStateSnapshot, getImageStateKey, parseFolderStateSnapshot } from './utils/folderState'
 import { sortImages } from './utils/imageSorting'
-import type { ImageFile, ImageSortOption, TriageState, ViewMode } from './types'
+import type { ExportedFolderState, ImageFile, ImageFilterState, ImageSortOption, TriageState, ViewMode } from './types'
 
 interface TriageHistoryEntry {
   changes: Array<{
@@ -31,7 +32,7 @@ const selectionOrder = ref<number[]>([])
 const lastSelectedIndex = ref<number | null>(null)
 const currentFocusIndex = ref<number | null>(null)
 const triageStates = ref<Map<number, TriageState>>(new Map())
-const activeFilters = ref<Set<TriageState | 'untriaged'>>(new Set(['accepted', 'untriaged', 'rejected']))
+const activeFilters = ref<Set<ImageFilterState>>(new Set(['accepted', 'untriaged', 'rejected']))
 const triageHistory = ref<TriageHistoryEntry[]>([])
 const redoHistory = ref<TriageHistoryEntry[]>([])
 const theme = ref<Theme>('system')
@@ -43,6 +44,7 @@ const detailPanX = ref(0)
 const detailPanY = ref(0)
 const showHelpModal = ref(false)
 const toolbarRef = ref<{ openFolder: () => void; reloadFolder: () => void } | null>(null)
+const importStateInputRef = ref<HTMLInputElement | null>(null)
 const showConfirmModal = ref(false)
 const confirmModalMessage = ref('')
 const confirmModalCallback = ref<(() => void) | null>(null)
@@ -263,8 +265,7 @@ function saveTriageStates() {
     if (state !== 'untriaged') {
       const image = images.value[index]
       if (image) {
-        const filePath = image.file.webkitRelativePath || image.name
-        triageData[filePath] = state
+        triageData[getImageStateKey(image)] = state
       }
     }
   }
@@ -289,7 +290,7 @@ function loadTriageStates() {
     // Map file paths to indices
     for (let i = 0; i < images.value.length; i++) {
       const image = images.value[i]
-      const filePath = image.file.webkitRelativePath || image.name
+      const filePath = getImageStateKey(image)
       
       if (triageData[filePath]) {
         triageStates.value.set(i, triageData[filePath])
@@ -321,6 +322,129 @@ const filteredIndices = computed(() => {
     return activeFilters.value.has(state)
   })
 })
+
+function syncSelectionToVisibleImages(preferredIndex: number | null = currentFocusIndex.value) {
+  const visibleIndexSet = new Set(filteredIndices.value)
+  const nextSelectionOrder = selectionOrder.value.filter(index => visibleIndexSet.has(index))
+  const nextSelectedIndices = new Set(nextSelectionOrder)
+
+  selectedIndices.value = nextSelectedIndices
+  selectionOrder.value = nextSelectionOrder
+
+  if (selectedIndices.value.size > 0) {
+    if (preferredIndex !== null && selectedIndices.value.has(preferredIndex)) {
+      currentFocusIndex.value = preferredIndex
+    } else {
+      currentFocusIndex.value = selectionOrder.value[0] ?? null
+    }
+
+    if (lastSelectedIndex.value === null || !selectedIndices.value.has(lastSelectedIndex.value)) {
+      lastSelectedIndex.value = selectionOrder.value[selectionOrder.value.length - 1] ?? null
+    }
+
+    syncDetailViewIndex()
+    return
+  }
+
+  if (filteredIndices.value.length > 0) {
+    const fallbackIndex = preferredIndex !== null && visibleIndexSet.has(preferredIndex)
+      ? preferredIndex
+      : filteredIndices.value[0]
+
+    selectedIndices.value.add(fallbackIndex)
+    selectionOrder.value = [fallbackIndex]
+    lastSelectedIndex.value = fallbackIndex
+    currentFocusIndex.value = fallbackIndex
+    syncDetailViewIndex()
+    scrollToImage(fallbackIndex)
+    return
+  }
+
+  lastSelectedIndex.value = null
+  currentFocusIndex.value = null
+  detailViewIndex.value = 0
+}
+
+function exportFolderState() {
+  if (!folderHandle.value || images.value.length === 0) {
+    return
+  }
+
+  const snapshot = createFolderStateSnapshot(
+    folderHandle.value.name,
+    images.value,
+    triageStates.value,
+    sortOption.value,
+    activeFilters.value
+  )
+  const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' })
+  const downloadUrl = URL.createObjectURL(blob)
+  const downloadLink = document.createElement('a')
+
+  downloadLink.href = downloadUrl
+  downloadLink.download = `${folderHandle.value.name}-lightbox-state.json`
+  downloadLink.click()
+
+  setTimeout(() => URL.revokeObjectURL(downloadUrl), 0)
+}
+
+function triggerImportFolderState() {
+  importStateInputRef.value?.click()
+}
+
+function applyImportedFolderState(snapshot: ExportedFolderState) {
+  const importedStatesByPath = new Map(snapshot.images.map(image => [image.path, image.triageState] as const))
+  const matchingPaths = images.value.filter(image => importedStatesByPath.has(getImageStateKey(image))).length
+
+  if (matchingPaths === 0) {
+    throw new Error('This export does not match any images in the currently opened folder.')
+  }
+
+  handleSortOptionChange(snapshot.sortOption)
+  activeFilters.value = new Set(snapshot.activeFilters)
+  triageStates.value = new Map()
+  triageHistory.value = []
+  redoHistory.value = []
+
+  for (let index = 0; index < images.value.length; index++) {
+    const importedState = importedStatesByPath.get(getImageStateKey(images.value[index])) ?? 'untriaged'
+    if (importedState !== 'untriaged') {
+      triageStates.value.set(index, importedState)
+    }
+  }
+
+  syncSelectionToVisibleImages()
+  saveTriageStates()
+
+  if (matchingPaths < snapshot.images.length) {
+    alert(`Imported state for ${matchingPaths} image${matchingPaths === 1 ? '' : 's'}. ${snapshot.images.length - matchingPaths} image entries were not found in the current folder.`)
+  }
+}
+
+async function handleImportFolderState(event: Event) {
+  if (!folderHandle.value) {
+    return
+  }
+
+  const input = event.target as HTMLInputElement | null
+  const file = input?.files?.[0]
+
+  if (!file) {
+    return
+  }
+
+  try {
+    const snapshot = parseFolderStateSnapshot(await file.text())
+    applyImportedFolderState(snapshot)
+  } catch (error) {
+    console.error('Failed to import folder state:', error)
+    alert((error as Error).message || 'Failed to import folder state.')
+  } finally {
+    if (input) {
+      input.value = ''
+    }
+  }
+}
 
 const acceptedCount = computed(() => {
   let count = 0
@@ -1256,6 +1380,56 @@ onUnmounted(() => {
 <template>
   <div :style="{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', backgroundColor: colors.bg, color: colors.text }">
     <Toolbar ref="toolbarRef" :colors="colors" :current-folder-handle="folderHandle" @folder-selected="handleFolderSelected">
+      <template #file-actions>
+        <button
+          v-if="images.length > 0"
+          @click="exportFolderState"
+          :style="{
+            width: '2.5rem',
+            height: '2.5rem',
+            backgroundColor: colors.buttonBg,
+            color: colors.text,
+            borderRadius: '0.5rem',
+            border: 'none',
+            cursor: 'pointer',
+            fontSize: '1.125rem',
+            transition: 'background-color 0.2s',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            lineHeight: '1'
+          }"
+          @mouseover="($event.currentTarget as HTMLElement).style.backgroundColor = colors.buttonHoverBg"
+          @mouseout="($event.currentTarget as HTMLElement).style.backgroundColor = colors.buttonBg"
+          title="Export folder state to JSON"
+        >
+          ⤓
+        </button>
+        <button
+          v-if="images.length > 0"
+          @click="triggerImportFolderState"
+          :style="{
+            width: '2.5rem',
+            height: '2.5rem',
+            backgroundColor: colors.buttonBg,
+            color: colors.text,
+            borderRadius: '0.5rem',
+            border: 'none',
+            cursor: 'pointer',
+            fontSize: '1.125rem',
+            transition: 'background-color 0.2s',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            lineHeight: '1'
+          }"
+          @mouseover="($event.currentTarget as HTMLElement).style.backgroundColor = colors.buttonHoverBg"
+          @mouseout="($event.currentTarget as HTMLElement).style.backgroundColor = colors.buttonBg"
+          title="Import folder state from JSON"
+        >
+          ⤒
+        </button>
+      </template>
       <template #actions>
         <button
           v-if="images.length > 0"
@@ -1539,6 +1713,13 @@ onUnmounted(() => {
         </button>
       </template>
     </Toolbar>
+    <input
+      ref="importStateInputRef"
+      type="file"
+      accept=".json,application/json"
+      style="display: none;"
+      @change="handleImportFolderState"
+    />
     
     <!-- Welcome Screen (when no folder loaded) -->
     <div v-if="images.length === 0" :style="{ flex: '1', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bg, padding: '2rem' }">
@@ -1730,6 +1911,7 @@ onUnmounted(() => {
           v-if="currentFocusIndex !== null"
           :image-url="images[currentFocusIndex].url"
           :image-name="images[currentFocusIndex].name"
+          :date-taken="images[currentFocusIndex].dateTaken"
           :camera-model="images[currentFocusIndex].cameraModel"
           :aspect-ratio="images[currentFocusIndex].aspectRatio"
           :image-index="currentFocusIndex"
