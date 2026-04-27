@@ -36,6 +36,8 @@ function handleTriageClick(state: TriageState, event: MouseEvent) {
     :data-image-index="index"
     :title="image.name"
     @click="handleClick"
+    @mousedown.prevent
+    @dragstart.prevent
     @mouseenter="isHovered = true"
     @mouseleave="isHovered = false"
     :style="{
@@ -48,7 +50,8 @@ function handleTriageClick(state: TriageState, event: MouseEvent) {
       backgroundColor: isSelected ? '#3b82f6' : (isFocused ? '#93c5fd' : 'transparent'),
       display: 'flex',
       alignItems: 'center',
-      position: 'relative'
+      position: 'relative',
+      userSelect: 'none'
     }"
   >
     <div :style="{
@@ -63,6 +66,7 @@ function handleTriageClick(state: TriageState, event: MouseEvent) {
         :src="image.url"
         :alt="image.name"
         :title="image.name"
+        draggable="false"
         :style="{
           height: `${imageHeight}px`,
           width: 'auto',

@@ -732,14 +732,25 @@ function cycleSortOption() {
   handleSortOptionChange(sortOptions[nextIndex].value)
 }
 
+function getFilteredRangeIndices(anchorIndex: number, targetIndex: number) {
+  const anchorFilteredIndex = filteredIndices.value.indexOf(anchorIndex)
+  const targetFilteredIndex = filteredIndices.value.indexOf(targetIndex)
+
+  if (anchorFilteredIndex < 0 || targetFilteredIndex < 0) {
+    return [targetIndex]
+  }
+
+  const start = Math.min(anchorFilteredIndex, targetFilteredIndex)
+  const end = Math.max(anchorFilteredIndex, targetFilteredIndex)
+  return filteredIndices.value.slice(start, end + 1)
+}
+
 function handleImageSelect(index: number, event: MouseEvent) {
   if (event.shiftKey && lastSelectedIndex.value !== null) {
-    const start = Math.min(lastSelectedIndex.value, index)
-    const end = Math.max(lastSelectedIndex.value, index)
-    for (let i = start; i <= end; i++) {
-      if (!selectedIndices.value.has(i)) {
-        selectedIndices.value.add(i)
-        selectionOrder.value.push(i)
+    for (const filteredIndex of getFilteredRangeIndices(lastSelectedIndex.value, index)) {
+      if (!selectedIndices.value.has(filteredIndex)) {
+        selectedIndices.value.add(filteredIndex)
+        selectionOrder.value.push(filteredIndex)
       }
     }
   } else if (event.ctrlKey || event.metaKey) {
@@ -985,14 +996,10 @@ function handleKeyDown(event: KeyboardEvent) {
     if (event.shiftKey) {
       // Expand selection
       if (lastSelectedIndex.value !== null) {
-        const start = Math.min(lastSelectedIndex.value, newIndex)
-        const end = Math.max(lastSelectedIndex.value, newIndex)
-        
-        // Add all indices in range that are also filtered
-        for (let i = start; i <= end; i++) {
-          if (filteredIndices.value.includes(i) && !selectedIndices.value.has(i)) {
-            selectedIndices.value.add(i)
-            selectionOrder.value.push(i)
+        for (const filteredIndex of getFilteredRangeIndices(lastSelectedIndex.value, newIndex)) {
+          if (!selectedIndices.value.has(filteredIndex)) {
+            selectedIndices.value.add(filteredIndex)
+            selectionOrder.value.push(filteredIndex)
           }
         }
       }
