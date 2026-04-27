@@ -322,6 +322,30 @@ const filteredIndices = computed(() => {
   })
 })
 
+const acceptedCount = computed(() => {
+  let count = 0
+  for (let index = 0; index < images.value.length; index++) {
+    if (triageStates.value.get(index) === 'accepted') {
+      count++
+    }
+  }
+  return count
+})
+
+const rejectedCount = computed(() => {
+  let count = 0
+  for (let index = 0; index < images.value.length; index++) {
+    if (triageStates.value.get(index) === 'rejected') {
+      count++
+    }
+  }
+  return count
+})
+
+const untriagedCount = computed(() => {
+  return images.value.length - acceptedCount.value - rejectedCount.value
+})
+
 function toggleFilter(filter: TriageState | 'untriaged') {
   if (activeFilters.value.has(filter)) {
     activeFilters.value.delete(filter)
@@ -1711,6 +1735,9 @@ onUnmounted(() => {
     <StatusBar
       :total-images="images.length"
       :filtered-count="filteredIndices.length"
+      :accepted-count="acceptedCount"
+      :rejected-count="rejectedCount"
+      :untriaged-count="untriagedCount"
       :selected-count="selectedIndices.size"
       :colors="colors"
     />

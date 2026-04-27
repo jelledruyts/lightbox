@@ -2,6 +2,9 @@
 const props = defineProps<{
   totalImages: number
   filteredCount: number
+  acceptedCount: number
+  rejectedCount: number
+  untriagedCount: number
   selectedCount: number
   colors: {
     bg: string
@@ -24,7 +27,11 @@ const props = defineProps<{
     color: colors.textSecondary,
     textAlign: 'center'
   }">
-    <span v-if="totalImages > 0">Showing {{ filteredCount }} of {{ totalImages }} images, {{ selectedCount }} selected</span>
+    <span v-if="totalImages > 0">
+      Showing {{ filteredCount }}/{{ totalImages }} images |
+      {{ acceptedCount }} accepted, {{ rejectedCount }} rejected, {{ untriagedCount }} untriaged |
+      {{ selectedCount }} selected
+    </span>
     <span v-else>No images loaded</span>
   </div>
 </template>
