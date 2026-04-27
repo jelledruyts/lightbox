@@ -726,6 +726,12 @@ function handleSortOptionChange(nextSortOption: string) {
   applySort(nextSortOption)
 }
 
+function cycleSortOption() {
+  const currentIndex = sortOptions.findIndex(option => option.value === sortOption.value)
+  const nextIndex = currentIndex >= 0 ? (currentIndex + 1) % sortOptions.length : 0
+  handleSortOptionChange(sortOptions[nextIndex].value)
+}
+
 function handleImageSelect(index: number, event: MouseEvent) {
   if (event.shiftKey && lastSelectedIndex.value !== null) {
     const start = Math.min(lastSelectedIndex.value, index)
@@ -787,6 +793,13 @@ function handleKeyDown(event: KeyboardEvent) {
   if ((event.key === 'r' || event.key === 'R') && !event.ctrlKey && !event.metaKey) {
     event.preventDefault()
     toolbarRef.value?.reloadFolder()
+    return
+  }
+
+  // Cycle sort option with S
+  if ((event.key === 's' || event.key === 'S') && !event.ctrlKey && !event.metaKey) {
+    event.preventDefault()
+    cycleSortOption()
     return
   }
   
@@ -1237,13 +1250,6 @@ onUnmounted(() => {
   <div :style="{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', backgroundColor: colors.bg, color: colors.text }">
     <Toolbar ref="toolbarRef" :colors="colors" :current-folder-handle="folderHandle" @folder-selected="handleFolderSelected">
       <template #actions>
-        <ToolbarSelect
-          label="Sort"
-          :model-value="sortOption"
-          :options="sortOptions"
-          :colors="colors"
-          @update:model-value="handleSortOptionChange"
-        />
         <button
           v-if="images.length > 0"
           @click="selectAll"
@@ -1377,6 +1383,16 @@ onUnmounted(() => {
           ↷
         </button>
         
+        <div v-if="images.length > 0" :style="{ width: '1px', height: '24px', backgroundColor: colors.border, margin: '0 0.5rem' }"></div>
+
+        <ToolbarSelect
+          v-if="images.length > 0"
+          :model-value="sortOption"
+          :options="sortOptions"
+          :colors="colors"
+          @update:model-value="handleSortOptionChange"
+        />
+
         <div v-if="images.length > 0" :style="{ width: '1px', height: '24px', backgroundColor: colors.border, margin: '0 0.5rem' }"></div>
         
         <button
@@ -1912,6 +1928,10 @@ onUnmounted(() => {
           <div>
             <h3 :style="{ margin: '0 0 0.75rem 0', fontSize: '1.125rem', fontWeight: '600', color: '#ec4899' }">View</h3>
             <div :style="{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }">
+              <div :style="{ display: 'flex', justifyContent: 'space-between' }">
+                <span>Toggle sort mode</span>
+                <kbd :style="{ padding: '0.25rem 0.5rem', backgroundColor: colors.bgSecondary, borderRadius: '0.25rem', fontSize: '0.875rem' }">S</kbd>
+              </div>
               <div :style="{ display: 'flex', justifyContent: 'space-between' }">
                 <span>Toggle view mode</span>
                 <kbd :style="{ padding: '0.25rem 0.5rem', backgroundColor: colors.bgSecondary, borderRadius: '0.25rem', fontSize: '0.875rem' }">V</kbd>

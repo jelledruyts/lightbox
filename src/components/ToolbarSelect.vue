@@ -1,7 +1,7 @@
 <script setup lang="ts">
 const props = defineProps<{
   modelValue: string
-  label: string
+  label?: string
   options: Array<{
     value: string
     label: string
@@ -28,7 +28,7 @@ function handleChange(event: Event) {
 
 <template>
   <label :style="{ display: 'flex', alignItems: 'center', gap: '0.5rem', color: colors.text, fontSize: '0.875rem', whiteSpace: 'nowrap' }">
-    <span :style="{ color: colors.textSecondary }">{{ label }}</span>
+    <span v-if="label" :style="{ color: colors.textSecondary }">{{ label }}</span>
     <select
       :value="modelValue"
       @change="handleChange"
