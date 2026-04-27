@@ -42,7 +42,7 @@ const detailZoom = ref(1)
 const detailPanX = ref(0)
 const detailPanY = ref(0)
 const showHelpModal = ref(false)
-const toolbarRef = ref<{ openFolder: () => void } | null>(null)
+const toolbarRef = ref<{ openFolder: () => void; reloadFolder: () => void } | null>(null)
 const showConfirmModal = ref(false)
 const confirmModalMessage = ref('')
 const confirmModalCallback = ref<(() => void) | null>(null)
@@ -758,6 +758,13 @@ function handleKeyDown(event: KeyboardEvent) {
     toolbarRef.value?.openFolder()
     return
   }
+
+  // Reload folder with R
+  if ((event.key === 'r' || event.key === 'R') && !event.ctrlKey && !event.metaKey) {
+    event.preventDefault()
+    toolbarRef.value?.reloadFolder()
+    return
+  }
   
   if (images.value.length === 0) return
   
@@ -1204,7 +1211,7 @@ onUnmounted(() => {
 
 <template>
   <div :style="{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden', backgroundColor: colors.bg, color: colors.text }">
-    <Toolbar ref="toolbarRef" :colors="colors" @folder-selected="handleFolderSelected">
+    <Toolbar ref="toolbarRef" :colors="colors" :current-folder-handle="folderHandle" @folder-selected="handleFolderSelected">
       <template #actions>
         <ToolbarSelect
           label="Sort"
@@ -1767,6 +1774,10 @@ onUnmounted(() => {
               <div :style="{ display: 'flex', justifyContent: 'space-between' }">
                 <span>Open folder</span>
                 <kbd :style="{ padding: '0.25rem 0.5rem', backgroundColor: colors.bgSecondary, borderRadius: '0.25rem', fontSize: '0.875rem' }">O</kbd>
+              </div>
+              <div :style="{ display: 'flex', justifyContent: 'space-between' }">
+                <span>Reload folder</span>
+                <kbd :style="{ padding: '0.25rem 0.5rem', backgroundColor: colors.bgSecondary, borderRadius: '0.25rem', fontSize: '0.875rem' }">R</kbd>
               </div>
               <div :style="{ display: 'flex', justifyContent: 'space-between' }">
                 <span>Delete selected images</span>
