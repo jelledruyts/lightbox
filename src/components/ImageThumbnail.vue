@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import type { ImageFile, TriageState } from '../types'
 
 const props = defineProps<{
@@ -8,6 +8,7 @@ const props = defineProps<{
   isSelected: boolean
   isFocused: boolean
   triageState?: TriageState
+  thumbnailHeight?: number
 }>()
 
 const emit = defineEmits<{
@@ -16,6 +17,9 @@ const emit = defineEmits<{
 }>()
 
 const isHovered = ref(false)
+const containerHeight = computed(() => props.thumbnailHeight ?? 96)
+const imageHeight = computed(() => Math.max(containerHeight.value - 8, 48))
+const maxImageWidth = computed(() => Math.round(imageHeight.value * 1.7))
 
 function handleClick(event: MouseEvent) {
   emit('select', props.index, event)
@@ -39,7 +43,7 @@ function handleTriageClick(state: TriageState, event: MouseEvent) {
       cursor: 'pointer',
       borderRadius: '4px',
       transition: 'all 0.2s',
-      height: '96px',
+      height: `${containerHeight}px`,
       padding: '4px',
       backgroundColor: isSelected ? '#3b82f6' : (isFocused ? '#93c5fd' : 'transparent'),
       display: 'flex',
@@ -60,9 +64,9 @@ function handleTriageClick(state: TriageState, event: MouseEvent) {
         :alt="image.name"
         :title="image.name"
         :style="{
-          height: '88px',
+          height: `${imageHeight}px`,
           width: 'auto',
-          maxWidth: '150px',
+          maxWidth: `${maxImageWidth}px`,
           objectFit: 'contain',
           display: 'block',
           pointerEvents: 'none'

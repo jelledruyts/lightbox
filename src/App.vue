@@ -47,6 +47,13 @@ const showConfirmModal = ref(false)
 const confirmModalMessage = ref('')
 const confirmModalCallback = ref<(() => void) | null>(null)
 const sortOption = ref<ImageSortOption>('date-taken')
+const filmstripHeight = ref(128)
+const isResizingFilmstrip = ref(false)
+const filmstripResizeStartY = ref(0)
+const filmstripResizeStartHeight = ref(128)
+
+const MIN_FILMSTRIP_HEIGHT = 96
+const MAX_FILMSTRIP_HEIGHT_RATIO = 0.45
 
 const sortOptions: SortOptionDefinition[] = [
   { value: 'date-taken', label: 'Date taken' },
@@ -70,6 +77,46 @@ function handleConfirm() {
 function handleCancel() {
   showConfirmModal.value = false
   confirmModalCallback.value = null
+}
+
+function getMaxFilmstripHeight() {
+  return Math.max(MIN_FILMSTRIP_HEIGHT, Math.round(window.innerHeight * MAX_FILMSTRIP_HEIGHT_RATIO))
+}
+
+function clampFilmstripHeight(height: number) {
+  return Math.min(Math.max(Math.round(height), MIN_FILMSTRIP_HEIGHT), getMaxFilmstripHeight())
+}
+
+function stopFilmstripResize() {
+  if (!isResizingFilmstrip.value) {
+    return
+  }
+
+  isResizingFilmstrip.value = false
+  document.body.style.cursor = ''
+  document.body.style.userSelect = ''
+}
+
+function handleFilmstripResize(event: PointerEvent) {
+  if (!isResizingFilmstrip.value) {
+    return
+  }
+
+  const deltaY = event.clientY - filmstripResizeStartY.value
+  filmstripHeight.value = clampFilmstripHeight(filmstripResizeStartHeight.value + deltaY)
+}
+
+function startFilmstripResize(event: PointerEvent) {
+  if (viewMode.value !== 'filmstrip') {
+    return
+  }
+
+  event.preventDefault()
+  filmstripResizeStartY.value = event.clientY
+  filmstripResizeStartHeight.value = filmstripHeight.value
+  isResizingFilmstrip.value = true
+  document.body.style.cursor = 'row-resize'
+  document.body.style.userSelect = 'none'
 }
 
 function remapIndex(index: number | null, indexMap: Map<number, number>) {
@@ -1088,8 +1135,15 @@ watch(sortOption, (nextSortOption) => {
   localStorage.setItem('lightbox-sort', nextSortOption)
 })
 
+watch(filmstripHeight, (height) => {
+  localStorage.setItem('lightbox-filmstrip-height', String(clampFilmstripHeight(height)))
+})
+
 onMounted(() => {
   window.addEventListener('keydown', handleKeyDown)
+  window.addEventListener('pointermove', handleFilmstripResize)
+  window.addEventListener('pointerup', stopFilmstripResize)
+  window.addEventListener('pointercancel', stopFilmstripResize)
   
   // Load saved filters
   const savedFilters = localStorage.getItem('lightbox-filters')
@@ -1112,6 +1166,16 @@ onMounted(() => {
   if (savedSortOption === 'date-taken' || savedSortOption === 'filename') {
     sortOption.value = savedSortOption
   }
+
+  const savedFilmstripHeight = localStorage.getItem('lightbox-filmstrip-height')
+  if (savedFilmstripHeight !== null) {
+    const parsedFilmstripHeight = Number(savedFilmstripHeight)
+    if (Number.isFinite(parsedFilmstripHeight)) {
+      filmstripHeight.value = clampFilmstripHeight(parsedFilmstripHeight)
+    }
+  } else {
+    filmstripHeight.value = clampFilmstripHeight(filmstripHeight.value)
+  }
   
   // Listen for system theme changes
   const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
@@ -1130,6 +1194,10 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('keydown', handleKeyDown)
+  window.removeEventListener('pointermove', handleFilmstripResize)
+  window.removeEventListener('pointerup', stopFilmstripResize)
+  window.removeEventListener('pointercancel', stopFilmstripResize)
+  stopFilmstripResize()
   cleanup()
 })
 </script>
@@ -1478,10 +1546,29 @@ onUnmounted(() => {
         :current-focus-index="currentFocusIndex"
         :triage-states="triageStates"
         :filtered-indices="filteredIndices"
+        :height="filmstripHeight"
         :colors="colors"
         @select="handleImageSelect"
         @triage-change="handleTriageChange"
       />
+      <div
+        @pointerdown="startFilmstripResize"
+        :title="'Drag to resize filmstrip'"
+        :style="{
+          flexShrink: 0,
+          height: '10px',
+          cursor: 'row-resize',
+          backgroundColor: isResizingFilmstrip ? colors.buttonHoverBg : colors.bgSecondary,
+          borderTop: `1px solid ${colors.border}`,
+          borderBottom: `1px solid ${colors.border}`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          touchAction: 'none'
+        }"
+      >
+        <div :style="{ width: '3rem', height: '2px', borderRadius: '999px', backgroundColor: colors.textSecondary, opacity: isResizingFilmstrip ? '1' : '0.6' }"></div>
+      </div>
       <div :style="{ flex: '1 1 0', overflow: 'hidden', minHeight: 0, position: 'relative' }">
         <ImageViewer
           :images="images"
