@@ -8,6 +8,8 @@ const props = defineProps<{
   cameraModel?: string | null
   imageIndex: number
   sequenceNumber: number
+  selectedPosition?: number | null
+  selectedCount?: number | null
   width: number
   height: number
   x: number
@@ -333,8 +335,21 @@ function handleTriageClick(state: TriageState) {
           color: colors?.textSecondary || '#d1d5db'
         }"
       >
-        {{ sequenceNumber }}
+        #{{ sequenceNumber }}
       </span>
+      <span :style="{ color: colors?.textSecondary || '#d1d5db' }">|</span>
+      <span
+        v-if="selectedPosition !== undefined && selectedPosition !== null && selectedCount !== undefined && selectedCount !== null"
+        :style="{
+          color: colors?.textSecondary || '#d1d5db'
+        }"
+      >
+        {{ selectedPosition }}/{{ selectedCount }}
+      </span>
+      <span
+        v-if="selectedPosition !== undefined && selectedPosition !== null && selectedCount !== undefined && selectedCount !== null"
+        :style="{ color: colors?.textSecondary || '#d1d5db' }"
+      >|</span>
       <span
         :title="imageName"
         :style="{
@@ -350,6 +365,10 @@ function handleTriageClick(state: TriageState) {
       </span>
       <span
         v-if="cameraModel"
+        :style="{ color: colors?.textSecondary || '#d1d5db' }"
+      >|</span>
+      <span
+        v-if="cameraModel"
         :title="cameraModel"
         :style="{
           maxWidth: '35%',
@@ -360,6 +379,7 @@ function handleTriageClick(state: TriageState) {
       >
         {{ cameraModel }}
       </span>
+      <span :style="{ color: colors?.textSecondary || '#d1d5db' }">|</span>
       <span :style="{ color: triageDisplay.color, fontWeight: '500' }">
         {{ triageDisplay.icon }} {{ triageDisplay.label }}
       </span>
