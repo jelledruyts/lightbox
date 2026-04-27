@@ -2,6 +2,7 @@
 import { ref, onUnmounted, onMounted, computed, watch } from 'vue'
 import Toolbar from './components/Toolbar.vue'
 import ToolbarSelect from './components/ToolbarSelect.vue'
+import ToolbarMultiSelect from './components/ToolbarMultiSelect.vue'
 import Filmstrip from './components/Filmstrip.vue'
 import ImageViewer from './components/ImageViewer.vue'
 import ImagePane from './components/ImagePane.vue'
@@ -26,6 +27,11 @@ interface SortOptionDefinition {
   label: string
 }
 
+interface CameraModelOptionDefinition {
+  value: string
+  label: string
+}
+
 const { images, loadImages, cleanup } = useImageLoader()
 const selectedIndices = ref<Set<number>>(new Set())
 const selectionOrder = ref<number[]>([])
@@ -33,6 +39,7 @@ const lastSelectedIndex = ref<number | null>(null)
 const currentFocusIndex = ref<number | null>(null)
 const triageStates = ref<Map<number, TriageState>>(new Map())
 const activeFilters = ref<Set<ImageFilterState>>(new Set(['accepted', 'untriaged', 'rejected']))
+const selectedCameraModels = ref<Set<string>>(new Set())
 const triageHistory = ref<TriageHistoryEntry[]>([])
 const redoHistory = ref<TriageHistoryEntry[]>([])
 const theme = ref<Theme>('system')
@@ -61,6 +68,26 @@ const sortOptions: SortOptionDefinition[] = [
   { value: 'date-taken', label: 'Date taken' },
   { value: 'filename', label: 'Filename' }
 ]
+
+const cameraModelOptions = computed<CameraModelOptionDefinition[]>(() => {
+  const uniqueCameraModels = new Set<string>()
+
+  for (const image of images.value) {
+    if (image.cameraModel) {
+      uniqueCameraModels.add(image.cameraModel)
+    }
+  }
+
+  return [...uniqueCameraModels]
+    .sort((left, right) => left.localeCompare(right))
+    .map(cameraModel => ({
+      value: cameraModel,
+      label: cameraModel
+    }))
+})
+
+const hasMultipleCameraModels = computed(() => cameraModelOptions.value.length > 1)
+const selectedCameraModelValues = computed(() => [...selectedCameraModels.value])
 
 function showConfirmation(message: string, onConfirm: () => void) {
   confirmModalMessage.value = message
@@ -275,6 +302,95 @@ function saveTriageStates() {
   localStorage.setItem(storageKey, JSON.stringify(triageData))
 }
 
+function getCameraModelFilterStorageKey(folderName: string) {
+  return `lightbox-camera-model-filter-${folderName}`
+}
+
+function areSetsEqual<T>(left: Set<T>, right: Set<T>) {
+  if (left.size !== right.size) {
+    return false
+  }
+
+  for (const value of left) {
+    if (!right.has(value)) {
+      return false
+    }
+  }
+
+  return true
+}
+
+function sanitizeSelectedCameraModels(values: Iterable<string>, defaultToAll: boolean) {
+  const availableValues = cameraModelOptions.value.map(option => option.value)
+  const availableValueSet = new Set(availableValues)
+
+  if (availableValues.length <= 1) {
+    return new Set(availableValues)
+  }
+
+  const filteredValues = [...new Set(values)].filter(value => availableValueSet.has(value))
+  if (filteredValues.length === 0 && defaultToAll) {
+    return new Set(availableValues)
+  }
+
+  return new Set(filteredValues)
+}
+
+function saveSelectedCameraModels() {
+  if (!folderHandle.value) {
+    return
+  }
+
+  const storageKey = getCameraModelFilterStorageKey(folderHandle.value.name)
+  if (!hasMultipleCameraModels.value) {
+    localStorage.removeItem(storageKey)
+    return
+  }
+
+  localStorage.setItem(storageKey, JSON.stringify([...selectedCameraModels.value]))
+}
+
+function applySelectedCameraModels(values: Iterable<string>, defaultToAll: boolean, syncSelection: boolean) {
+  const nextSelectedCameraModels = sanitizeSelectedCameraModels(values, defaultToAll)
+  const selectionChanged = !areSetsEqual(selectedCameraModels.value, nextSelectedCameraModels)
+
+  if (selectionChanged) {
+    selectedCameraModels.value = nextSelectedCameraModels
+  }
+
+  saveSelectedCameraModels()
+
+  if (selectionChanged && syncSelection) {
+    syncSelectionToVisibleImages()
+  }
+}
+
+function loadSelectedCameraModels() {
+  if (!folderHandle.value) {
+    return
+  }
+
+  const storageKey = getCameraModelFilterStorageKey(folderHandle.value.name)
+  const saved = localStorage.getItem(storageKey)
+
+  if (!saved) {
+    applySelectedCameraModels(cameraModelOptions.value.map(option => option.value), true, false)
+    return
+  }
+
+  try {
+    const savedValues = JSON.parse(saved) as string[]
+    if (!Array.isArray(savedValues) || savedValues.some(value => typeof value !== 'string')) {
+      throw new Error('Invalid saved camera model filter state.')
+    }
+
+    applySelectedCameraModels(savedValues, true, false)
+  } catch (error) {
+    console.error('Failed to load camera model filters:', error)
+    applySelectedCameraModels(cameraModelOptions.value.map(option => option.value), true, false)
+  }
+}
+
 function loadTriageStates() {
   if (!folderHandle.value) return
   
@@ -319,13 +435,18 @@ watch(activeFilters, (filters) => {
 const filteredIndices = computed(() => {
   return Array.from({ length: images.value.length }, (_, i) => i).filter(index => {
     const state = triageStates.value.get(index) || 'untriaged'
-    return activeFilters.value.has(state)
+    const image = images.value[index]
+    const cameraModelMatches = !hasMultipleCameraModels.value
+      || selectedCameraModels.value.size === cameraModelOptions.value.length
+      || (image.cameraModel !== null && selectedCameraModels.value.has(image.cameraModel))
+
+    return activeFilters.value.has(state) && cameraModelMatches
   })
 })
 
 function syncSelectionToVisibleImages(preferredIndex: number | null = currentFocusIndex.value) {
   const visibleIndexSet = new Set(filteredIndices.value)
-  const nextSelectionOrder = selectionOrder.value.filter(index => visibleIndexSet.has(index))
+  const nextSelectionOrder = [...new Set(selectionOrder.value.filter(index => visibleIndexSet.has(index)))]
   const nextSelectedIndices = new Set(nextSelectionOrder)
 
   selectedIndices.value = nextSelectedIndices
@@ -375,7 +496,8 @@ function exportFolderState() {
     images.value,
     triageStates.value,
     sortOption.value,
-    activeFilters.value
+    activeFilters.value,
+    hasMultipleCameraModels.value ? [...selectedCameraModels.value] : undefined
   )
   const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' })
   const downloadUrl = URL.createObjectURL(blob)
@@ -402,6 +524,7 @@ function applyImportedFolderState(snapshot: ExportedFolderState) {
 
   handleSortOptionChange(snapshot.sortOption)
   activeFilters.value = new Set(snapshot.activeFilters)
+  applySelectedCameraModels(snapshot.selectedCameraModels ?? cameraModelOptions.value.map(option => option.value), true, false)
   triageStates.value = new Map()
   triageHistory.value = []
   redoHistory.value = []
@@ -510,6 +633,10 @@ function toggleFilter(filter: TriageState | 'untriaged') {
 
 function setAllFilters() {
   activeFilters.value = new Set(['accepted', 'untriaged', 'rejected'])
+}
+
+function handleCameraModelFilterChange(values: string[]) {
+  applySelectedCameraModels(values, false, true)
 }
 
 function toggleTheme() {
@@ -828,17 +955,9 @@ async function handleFolderSelected(files: File[], dirHandle: FileSystemDirector
   
   // Load saved triage states after images are loaded
   loadTriageStates()
-  
-  if (images.value.length > 0) {
-    // Select first visible image (respecting active filters)
-    const firstVisibleIndex = filteredIndices.value[0]
-    if (firstVisibleIndex !== undefined) {
-      selectedIndices.value.add(firstVisibleIndex)
-      selectionOrder.value.push(firstVisibleIndex)
-      lastSelectedIndex.value = firstVisibleIndex
-      currentFocusIndex.value = firstVisibleIndex
-    }
-  }
+  loadSelectedCameraModels()
+
+  syncSelectionToVisibleImages(filteredIndices.value[0] ?? null)
 }
 
 function handleSortOptionChange(nextSortOption: string) {
@@ -1156,7 +1275,7 @@ function scrollToImage(index: number) {
 function selectAll() {
   selectedIndices.value.clear()
   selectionOrder.value = []
-  images.value.forEach((_, index) => {
+  filteredIndices.value.forEach(index => {
     selectedIndices.value.add(index)
     selectionOrder.value.push(index)
   })
@@ -1308,6 +1427,10 @@ watch(viewMode, (newMode) => {
 
 watch(sortOption, (nextSortOption) => {
   localStorage.setItem('lightbox-sort', nextSortOption)
+})
+
+watch(cameraModelOptions, () => {
+  applySelectedCameraModels(selectedCameraModels.value, true, true)
 })
 
 watch(filmstripHeight, (height) => {
@@ -1646,6 +1769,15 @@ onUnmounted(() => {
           :options="sortOptions"
           :colors="colors"
           @update:model-value="handleSortOptionChange"
+        />
+
+        <ToolbarMultiSelect
+          v-if="hasMultipleCameraModels"
+          :model-value="selectedCameraModelValues"
+          :options="cameraModelOptions"
+          all-label="All cameras"
+          :colors="colors"
+          @update:model-value="handleCameraModelFilterChange"
         />
         
         <!-- View mode button (conditional) -->

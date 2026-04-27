@@ -52,5 +52,6 @@ export interface ExportedFolderState {
   exportedAt: string
   sortOption: ImageSortOption
   activeFilters: ImageFilterState[]
+  selectedCameraModels?: string[]
   images: ExportedFolderStateImage[]
 }

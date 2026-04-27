@@ -12,7 +12,8 @@ export function createFolderStateSnapshot(
   images: ImageFile[],
   triageStates: Map<number, TriageState>,
   sortOption: ImageSortOption,
-  activeFilters: Set<ImageFilterState>
+  activeFilters: Set<ImageFilterState>,
+  selectedCameraModels?: string[]
 ): ExportedFolderState {
   return {
     version: 1,
@@ -20,6 +21,7 @@ export function createFolderStateSnapshot(
     exportedAt: new Date().toISOString(),
     sortOption,
     activeFilters: Array.from(activeFilters),
+    selectedCameraModels,
     images: images.map((image, index) => ({
       path: getImageStateKey(image),
       triageState: triageStates.get(index) ?? 'untriaged'
@@ -56,6 +58,12 @@ export function parseFolderStateSnapshot(json: string): ExportedFolderState {
     throw new Error('The exported filters are invalid.')
   }
 
+  if (snapshot.selectedCameraModels !== undefined) {
+    if (!Array.isArray(snapshot.selectedCameraModels) || snapshot.selectedCameraModels.some(model => typeof model !== 'string')) {
+      throw new Error('The exported camera model filter is invalid.')
+    }
+  }
+
   if (!Array.isArray(snapshot.images)) {
     throw new Error('The exported image state list is invalid.')
   }
@@ -80,6 +88,7 @@ export function parseFolderStateSnapshot(json: string): ExportedFolderState {
     exportedAt: snapshot.exportedAt,
     sortOption: snapshot.sortOption,
     activeFilters: [...snapshot.activeFilters],
+    selectedCameraModels: snapshot.selectedCameraModels ? [...snapshot.selectedCameraModels] : undefined,
     images: snapshot.images.map(image => ({
       path: image.path,
       triageState: image.triageState
