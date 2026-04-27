@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import type { TriageState } from '../types'
 
 const props = defineProps<{
   imageUrl: string
   imageName: string
   cameraModel?: string | null
+  aspectRatio: number
   imageIndex: number
   sequenceNumber: number
   selectedPosition?: number | null
@@ -43,6 +44,9 @@ const dragStart = ref({ x: 0, y: 0 })
 const isHovered = ref(false)
 const containerRef = ref<HTMLElement>()
 const viewportRef = ref<HTMLElement>()
+const viewportWidth = ref(0)
+const viewportHeight = ref(0)
+let resizeObserver: ResizeObserver | null = null
 
 const triageDisplay = computed(() => {
   if (props.triageState === 'accepted') {
@@ -67,6 +71,44 @@ const triageDisplay = computed(() => {
     color: props.colors?.textSecondary || '#9ca3af'
   }
 })
+
+const imageBounds = computed(() => {
+  const width = viewportWidth.value
+  const height = viewportHeight.value
+
+  if (width <= 0 || height <= 0 || props.aspectRatio <= 0) {
+    return {
+      top: 0,
+      right: 0,
+      bottom: 0,
+      left: 0
+    }
+  }
+
+  const viewportRatio = width / height
+  const renderedWidth = viewportRatio > props.aspectRatio ? height * props.aspectRatio : width
+  const renderedHeight = viewportRatio > props.aspectRatio ? height : width / props.aspectRatio
+  const horizontalMargin = Math.max((width - renderedWidth) / 2, 0)
+  const verticalMargin = Math.max((height - renderedHeight) / 2, 0)
+
+  return {
+    top: verticalMargin,
+    right: horizontalMargin,
+    bottom: verticalMargin,
+    left: horizontalMargin
+  }
+})
+
+function updateViewportSize() {
+  if (!viewportRef.value) {
+    viewportWidth.value = 0
+    viewportHeight.value = 0
+    return
+  }
+
+  viewportWidth.value = viewportRef.value.clientWidth
+  viewportHeight.value = viewportRef.value.clientHeight
+}
 
 function constrainPan(panX: number, panY: number, zoom: number) {
   if (zoom <= 1) {
@@ -181,6 +223,22 @@ function handleTriageClick(state: TriageState) {
   emit('triageChange', props.imageIndex, state)
 }
 
+onMounted(() => {
+  updateViewportSize()
+
+  if (viewportRef.value) {
+    resizeObserver = new ResizeObserver(() => {
+      updateViewportSize()
+    })
+    resizeObserver.observe(viewportRef.value)
+  }
+})
+
+onUnmounted(() => {
+  resizeObserver?.disconnect()
+  resizeObserver = null
+})
+
 </script>
 
 <template>
@@ -197,8 +255,6 @@ function handleTriageClick(state: TriageState) {
       display: 'flex',
       flexDirection: 'column'
     }"
-    @mouseenter="isHovered = true"
-    @mouseleave="isHovered = false"
   >
     <div
       ref="viewportRef"
@@ -209,6 +265,8 @@ function handleTriageClick(state: TriageState) {
         position: 'relative',
         overflow: 'hidden'
       }"
+      @mouseenter="isHovered = true"
+      @mouseleave="isHovered = false"
     >
       <div
         :style="{
@@ -236,22 +294,22 @@ function handleTriageClick(state: TriageState) {
         v-show="isHovered"
         :style="{
           position: 'absolute',
-          bottom: '8px',
-          right: '8px',
+          bottom: `${imageBounds.bottom + 8}px`,
+          right: `${imageBounds.right + 8}px`,
           display: 'flex',
           gap: '4px'
         }"
       >
         <button @click="zoomIn" style="padding: 4px 8px; background: rgba(0,0,0,0.7); color: white; border: none; border-radius: 4px; cursor: pointer;" title="Zoom in">+</button>
         <button @click="zoomOut" style="padding: 4px 8px; background: rgba(0,0,0,0.7); color: white; border: none; border-radius: 4px; cursor: pointer;" title="Zoom out">-</button>
-        <button @click="resetView" style="padding: 4px 8px; background: rgba(0,0,0,0.7); color: white; border: none; border-radius: 4px; cursor: pointer;" title="Reset">Reset</button>
+        <button @click="resetView" style="padding: 4px 8px; background: rgba(0,0,0,0.7); color: white; border: none; border-radius: 4px; cursor: pointer;" title="Reset">⟲</button>
       </div>
       
       <!-- Triage controls -->
       <div v-show="isHovered" :style="{
         position: 'absolute',
-        top: '8px',
-        right: '8px',
+        top: `${imageBounds.top + 8}px`,
+        right: `${imageBounds.right + 8}px`,
         display: 'flex',
         gap: '4px',
         backgroundColor: 'rgba(0, 0, 0, 0.7)',

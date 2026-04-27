@@ -1684,6 +1684,7 @@ onUnmounted(() => {
           :image-url="images[currentFocusIndex].url"
           :image-name="images[currentFocusIndex].name"
           :camera-model="images[currentFocusIndex].cameraModel"
+          :aspect-ratio="images[currentFocusIndex].aspectRatio"
           :image-index="currentFocusIndex"
           :sequence-number="currentFocusIndex + 1"
           :selected-position="detailViewIndex + 1"

@@ -88,6 +88,7 @@ function resetZoom() {
       :image-url="image.url"
       :image-name="image.name"
       :camera-model="image.cameraModel"
+      :aspect-ratio="image.aspectRatio"
       :image-index="selectionOrder[index]"
       :sequence-number="selectionOrder[index] + 1"
       :triage-state="triageStates.get(selectionOrder[index])"
