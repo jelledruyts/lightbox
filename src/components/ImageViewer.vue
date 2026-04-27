@@ -88,6 +88,8 @@ function resetZoom() {
       :image-url="image.url"
       :image-name="image.name"
       :image-index="selectionOrder[index]"
+      :sequence-number="index + 1"
+      :sequence-count="selectedImages.length"
       :triage-state="triageStates.get(selectionOrder[index])"
       :width="layout.positions[index]?.width || 0"
       :height="layout.positions[index]?.height || 0"

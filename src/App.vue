@@ -1677,6 +1677,8 @@ onUnmounted(() => {
           :image-url="images[currentFocusIndex].url"
           :image-name="images[currentFocusIndex].name"
           :image-index="currentFocusIndex"
+          :sequence-number="detailViewIndex + 1"
+          :sequence-count="selectedIndices.size"
           :triage-state="triageStates.get(currentFocusIndex)"
           :width="0"
           :height="0"
@@ -1693,22 +1695,6 @@ onUnmounted(() => {
           @pan-change="handleDetailPanChange"
           @reset-zoom="resetDetailZoom"
         />
-        
-        <!-- Image counter and triage indicator -->
-        <div :style="{ position: 'absolute', bottom: '1rem', left: '50%', transform: 'translateX(-50%)', display: 'flex', gap: '1rem', alignItems: 'center', backgroundColor: colors.bg, padding: '0.5rem 1rem', borderRadius: '0.5rem', border: `1px solid ${colors.border}`, zIndex: 5 }">
-          <span :style="{ color: colors.text, fontSize: '0.875rem' }">
-            {{ detailViewIndex + 1 }} / {{ selectedIndices.size }}
-          </span>
-          <div :style="{ width: '1px', height: '1rem', backgroundColor: colors.border }"></div>
-          <div :style="{ display: 'flex', gap: '0.5rem', alignItems: 'center' }">
-            <span v-if="currentFocusIndex !== null" :style="{ color: colors.text, fontSize: '0.875rem' }">
-              {{ images[currentFocusIndex].name }}
-            </span>
-            <span v-if="currentFocusIndex !== null && triageStates.get(currentFocusIndex) === 'accepted'" :style="{ color: '#10b981' }">✓</span>
-            <span v-if="currentFocusIndex !== null && triageStates.get(currentFocusIndex) === 'rejected'" :style="{ color: '#ef4444' }">✗</span>
-            <span v-if="currentFocusIndex !== null && !triageStates.get(currentFocusIndex)" :style="{ color: colors.textSecondary }">○</span>
-          </div>
-        </div>
       </div>
     </div>
     
