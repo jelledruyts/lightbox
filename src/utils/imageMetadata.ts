@@ -1,3 +1,8 @@
+export interface ImageMetadata {
+  dateTaken: number | null
+  cameraModel: string | null
+}
+
 function readAscii(view: DataView, offset: number, length: number) {
   if (offset < 0 || offset + length > view.byteLength) {
     return null
@@ -82,10 +87,18 @@ function parseExifDate(value: string | null) {
   ).getTime()
 }
 
-function extractExifDateTaken(buffer: ArrayBuffer) {
+function normalizeExifText(value: string | null) {
+  const normalized = value?.trim()
+  return normalized ? normalized : null
+}
+
+function extractExifMetadata(buffer: ArrayBuffer): ImageMetadata {
   const view = new DataView(buffer)
   if (view.byteLength < 4 || view.getUint16(0) !== 0xffd8) {
-    return null
+    return {
+      dateTaken: null,
+      cameraModel: null
+    }
   }
 
   let offset = 2
@@ -107,50 +120,74 @@ function extractExifDateTaken(buffer: ArrayBuffer) {
       if (exifHeader === 'Exif\0\0') {
         const tiffOffset = offset + 8
         if (tiffOffset + 8 > view.byteLength) {
-          return null
+          return {
+            dateTaken: null,
+            cameraModel: null
+          }
         }
 
         const byteOrderMarker = view.getUint16(tiffOffset)
         const littleEndian = byteOrderMarker === 0x4949
         if (!littleEndian && byteOrderMarker !== 0x4d4d) {
-          return null
-        }
-
-        if (view.getUint16(tiffOffset + 2, littleEndian) !== 0x002a) {
-          return null
-        }
-
-        const ifd0Offset = tiffOffset + view.getUint32(tiffOffset + 4, littleEndian)
-        const exifIfdPointer = getLongTagValue(view, ifd0Offset, tiffOffset, littleEndian, 0x8769)
-
-        if (exifIfdPointer !== null) {
-          const exifIfdOffset = tiffOffset + exifIfdPointer
-          const dateTaken = parseExifDate(getAsciiTagValue(view, exifIfdOffset, tiffOffset, littleEndian, 0x9003))
-          if (dateTaken !== null) {
-            return dateTaken
+          return {
+            dateTaken: null,
+            cameraModel: null
           }
         }
 
-        return parseExifDate(getAsciiTagValue(view, ifd0Offset, tiffOffset, littleEndian, 0x0132))
+        if (view.getUint16(tiffOffset + 2, littleEndian) !== 0x002a) {
+          return {
+            dateTaken: null,
+            cameraModel: null
+          }
+        }
+
+        const ifd0Offset = tiffOffset + view.getUint32(tiffOffset + 4, littleEndian)
+        const cameraModel = normalizeExifText(getAsciiTagValue(view, ifd0Offset, tiffOffset, littleEndian, 0x0110))
+        const exifIfdPointer = getLongTagValue(view, ifd0Offset, tiffOffset, littleEndian, 0x8769)
+        let dateTaken: number | null = null
+
+        if (exifIfdPointer !== null) {
+          const exifIfdOffset = tiffOffset + exifIfdPointer
+          dateTaken = parseExifDate(getAsciiTagValue(view, exifIfdOffset, tiffOffset, littleEndian, 0x9003))
+        }
+
+        if (dateTaken === null) {
+          dateTaken = parseExifDate(getAsciiTagValue(view, ifd0Offset, tiffOffset, littleEndian, 0x0132))
+        }
+
+        return {
+          dateTaken,
+          cameraModel
+        }
       }
     }
 
     offset += segmentLength
   }
 
-  return null
+  return {
+    dateTaken: null,
+    cameraModel: null
+  }
 }
 
-export async function extractDateTaken(file: File) {
+export async function extractImageMetadata(file: File): Promise<ImageMetadata> {
   if (file.type !== 'image/jpeg') {
-    return null
+    return {
+      dateTaken: null,
+      cameraModel: null
+    }
   }
 
   try {
     const buffer = await file.arrayBuffer()
-    return extractExifDateTaken(buffer)
+    return extractExifMetadata(buffer)
   } catch (error) {
     console.error(`Failed to read metadata for ${file.name}:`, error)
-    return null
+    return {
+      dateTaken: null,
+      cameraModel: null
+    }
   }
 }

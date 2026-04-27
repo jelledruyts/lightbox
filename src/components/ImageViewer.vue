@@ -87,6 +87,7 @@ function resetZoom() {
       :key="image.url"
       :image-url="image.url"
       :image-name="image.name"
+      :camera-model="image.cameraModel"
       :image-index="selectionOrder[index]"
       :sequence-number="index + 1"
       :sequence-count="selectedImages.length"

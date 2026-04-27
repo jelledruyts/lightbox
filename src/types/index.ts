@@ -10,6 +10,7 @@ export interface ImageFile {
   name: string
   aspectRatio: number
   dateTaken: number | null
+  cameraModel: string | null
 }
 
 export interface ImageSelection {

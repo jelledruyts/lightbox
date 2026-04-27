@@ -1,6 +1,6 @@
 import { ref } from 'vue'
 import type { ImageFile, ImageSortOption } from '../types'
-import { extractDateTaken } from '../utils/imageMetadata'
+import { extractImageMetadata } from '../utils/imageMetadata'
 import { sortImages } from '../utils/imageSorting'
 
 export function useImageLoader() {
@@ -14,9 +14,9 @@ export function useImageLoader() {
     for (const file of files) {
       try {
         const url = URL.createObjectURL(file)
-        const [aspectRatio, dateTaken] = await Promise.all([
+        const [aspectRatio, metadata] = await Promise.all([
           getImageAspectRatio(url),
-          extractDateTaken(file)
+          extractImageMetadata(file)
         ])
         
         loadedImages.push({
@@ -24,7 +24,8 @@ export function useImageLoader() {
           url,
           name: file.name,
           aspectRatio,
-          dateTaken
+          dateTaken: metadata.dateTaken,
+          cameraModel: metadata.cameraModel
         })
       } catch (error) {
         console.error(`Failed to load image ${file.name}:`, error)

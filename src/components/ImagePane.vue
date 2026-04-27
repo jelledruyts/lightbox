@@ -5,6 +5,7 @@ import type { TriageState } from '../types'
 const props = defineProps<{
   imageUrl: string
   imageName: string
+  cameraModel?: string | null
   imageIndex: number
   sequenceNumber: number
   sequenceCount: number
@@ -331,7 +332,7 @@ function handleTriageClick(state: TriageState) {
       <span
         :title="imageName"
         :style="{
-          maxWidth: '100%',
+          maxWidth: props.cameraModel ? '45%' : '100%',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           whiteSpace: 'nowrap',
@@ -340,6 +341,18 @@ function handleTriageClick(state: TriageState) {
         }"
       >
         {{ imageName }}
+      </span>
+      <span
+        v-if="cameraModel"
+        :title="cameraModel"
+        :style="{
+          maxWidth: '35%',
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap'
+        }"
+      >
+        {{ cameraModel }}
       </span>
       <span>{{ sequenceNumber }} / {{ sequenceCount }}</span>
       <span :style="{ color: triageDisplay.color, fontWeight: '500' }">

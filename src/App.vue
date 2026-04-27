@@ -1676,6 +1676,7 @@ onUnmounted(() => {
           v-if="currentFocusIndex !== null"
           :image-url="images[currentFocusIndex].url"
           :image-name="images[currentFocusIndex].name"
+          :camera-model="images[currentFocusIndex].cameraModel"
           :image-index="currentFocusIndex"
           :sequence-number="detailViewIndex + 1"
           :sequence-count="selectedIndices.size"
